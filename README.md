@@ -3,7 +3,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
 [![Validate](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml/badge.svg)](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml)
 ![Lizenz](https://img.shields.io/github/license/muhkuh666/helios-compass-card)
-![Version](https://img.shields.io/badge/version-1.6.1-orange.svg)
+![Version](https://img.shields.io/badge/version-1.7.0-orange.svg)
 
 **PV-Sonnenkompass für Home Assistant.** Die Karte zeigt, aus welcher Himmelsrichtung deine Solaranlage wie viel liefert. Jeder Sektor der Rose steht für eine Sonnenrichtung. Die Farben zeigen die Leistungsklassen, die Länge den Anteil an Zeit oder Ertrag. Darunter liegt auf Wunsch ein Luftbild deines Hauses.
 
@@ -30,6 +30,7 @@ Geeignet für Balkonkraftwerke, Dachanlagen und beides zusammen.
   - **Schatten:** Verschattungskarte aus Richtung × Sonnenhöhe. Sie zeigt, bei welchem Sonnenstand Bäume oder Nachbarhäuser Schatten werfen.
 - **Sonnenbahnen:** die heutige Bahn mit Uhrzeiten, Auf- und Untergang sowie die Bahnen am längsten (21.6.) und kürzesten Tag (21.12.).
 - **Zeiträume:** 1, 8, 12 und 24 Stunden, 7, 14 und 30 Tage, 1 Jahr, außerdem **Sommer** und **Winter** mit der jeweils anderen Jahreszeit als Vergleich.
+- **Gemessener Ertrag:** Mit einem Energiezähler (kWh) je Anlage sind Ertrag, kWh/kWp und „Ertrag heute“ exakt gemessen statt berechnet.
 - **Ertrag pro kWp:** spezifischer Ertrag je Anlage, z. B. „BKW 1,8 · Dach 1,5 kWh/kWp“ für einen fairen Vergleich.
 - **Mehrere Anlagen:** z. B. BKW, Dach und „Gesamt“ (Summe) per Umschalter in einer Karte.
 - **Kennzahlen:** Ertrag im Zeitraum, Spitzenleistung mit Zeitpunkt und Richtung, beste Richtung.
@@ -161,6 +162,34 @@ Bei **Sommer** und **Winter** erscheint die jeweils andere Jahreszeit als **gest
 
 ---
 
+## Gemessener Ertrag (Energiezähler)
+
+Ohne Energiezähler rechnet die Karte den Ertrag aus dem Leistungsverlauf hoch. Das ist genau genug für die Verteilung nach Richtungen, kann aber vom Zähler des Wechselrichters abweichen. Gibst du je Anlage einen **Energiesensor** an (`energy_entity`), nutzt die Karte die echten Messwerte für:
+
+- **Ertrag** in den Kennzahlen. Er heißt dann „Ertrag (gemessen)“.
+- **kWh/kWp** und den Vergleich der Anlagen.
+- den neuen Eckwert **„Ertrag heute“** (`type: energy_today`).
+
+Geeignet sind Gesamtzähler (z. B. „PV Gesamtertrag“) und täglich zurückgesetzte Zähler (z. B. „PV Tagesertrag“) in Wh, kWh oder MWh. Voraussetzung ist eine Langzeitstatistik, also `state_class: total_increasing` oder `total`. Das ist bei allen Sensoren der Fall, die du im Energie-Dashboard auswählen kannst.
+
+```yaml
+sources:
+  - name: BKW
+    entity: sensor.bkw_leistung
+    energy_entity: sensor.bkw_ertrag_gesamt
+    kwp: 0.8
+  - name: Dach
+    entity: sensor.dach_leistung
+    energy_entity: sensor.dach_ertrag_gesamt
+    kwp: 6.0
+corners:
+  bottom_right: {type: energy_today}
+```
+
+Bei „Gesamt“ wird der gemessene Ertrag nur genutzt, wenn alle Anlagen einen Energiezähler haben. Die Verteilung auf die Himmelsrichtungen kommt weiterhin aus dem Leistungsverlauf.
+
+---
+
 ## Ertrag pro kWp
 
 Gibst du die Anlagenleistung in kWp an, zeigt die Karte den **spezifischen Ertrag** in kWh/kWp:
@@ -274,6 +303,7 @@ corners:
 | Typ | Anzeige |
 |---|---|
 | `type: source` | Leistung der gewählten Anlage (bei „Gesamt“ die Summe) |
+| `type: energy_today` | Ertrag heute der gewählten Anlage (braucht `energy_entity`) |
 | `entity: …` | beliebige Entität, optional mit `unit` und `decimals` |
 | `type: azimuth` | aktueller Sonnenazimut |
 | `type: elevation` | aktuelle Sonnenhöhe |
@@ -295,6 +325,7 @@ Die Standardbelegung: oben links die Leistung der gewählten Anlage, oben rechts
 | `title` | `Helios Compass Card` | Kartentitel, `""` blendet ihn aus |
 | `max_power` | `8000` | Obergrenze der Leistungsklassen in W, z. B. `800` für ein BKW |
 | `legend_label` | `PV-Leistung` | Beschriftung der Farbskala |
+| `energy_entity` | – | Ertragszähler in Wh/kWh (bei nur einem Sensor), für gemessenen Ertrag |
 | `kwp` | Summe aus `modules` | Anlagenleistung in **kWp** für kWh/kWp (bei nur einem Sensor), z. B. 750 Wp = `0.75` |
 | `metric` | `time` | Standard-Ansicht: `time`, `energy`, `avg_power` oder `shading` |
 | `show_metric_switch` | `true` | Umschalter Zeit / Ertrag / Ø Leistung / Schatten anzeigen |
@@ -347,6 +378,7 @@ Die Standardbelegung: oben links die Leistung der gewählten Anlage, oben rechts
 | `name` | Name im Umschalter und in der Legende |
 | `max_power` | Obergrenze der Leistungsklassen dieser Anlage |
 | `kwp` | Anlagenleistung in kWp (für kWh/kWp) |
+| `energy_entity` | Ertragszähler dieser Anlage (Wh/kWh) |
 | `color_stops` | eigene Farbstufen |
 | `modules` | eigene Modulfelder |
 | `legend_label` | eigene Beschriftung der Farbskala |
@@ -397,7 +429,7 @@ mode: single
   - Lade danach mit Strg+F5 neu.
 - **Zeiträume ab 7 Tagen** nutzen die Langzeitstatistiken. Der Sensor braucht dafür `state_class: measurement`. Fehlen sie, nutzt die Karte den normalen Verlauf, soweit der Recorder so weit zurückreicht.
 - **1 bis 24 Stunden** stammen aus dem Recorder-Verlauf mit 1- bzw. 5-Minuten-Auflösung.
-- Den **Ertrag** berechnet die Karte aus dem Leistungsverlauf. Er kann daher leicht vom Zählerstand des Wechselrichters abweichen.
+- Ohne `energy_entity` berechnet die Karte den **Ertrag** aus dem Leistungsverlauf. Er kann daher leicht vom Zählerstand des Wechselrichters abweichen. Mit Energiezähler ist er gemessen.
 - Ab 7 Tagen ist die **Spitze für „Gesamt“** eine obere Abschätzung, weil stündliche Höchstwerte addiert werden.
 - Die Zahlen sind deutsch formatiert. Die Karte unterstützt den hellen und dunklen Modus über die Theme-Farben von Home Assistant.
 
@@ -407,6 +439,7 @@ mode: single
 
 | Version | Änderungen |
 |---|---|
+| **1.7.0** | Energiezähler je Anlage (`energy_entity`): gemessener Ertrag und kWh/kWp; neuer Eckwert „Ertrag heute“ (`type: energy_today`) |
 | **1.6.1** | ☀-Knopf zum Ein-/Ausblenden der Sonnenbahnen; Ansichten im Umschalter wählbar (z. B. ohne „Schatten“); Editor blendet Einzel-Sensor aus, wenn Anlagen angelegt sind; kürzere Feldbezeichnungen |
 | **1.6.0** | Sonnenbahnen (heute mit Auf-/Untergang, 21.6., 21.12.); Ansicht „Schatten“ (Richtung × Sonnenhöhe); Zeiträume 30 Tage, 1 Jahr, Sommer, Winter mit Vergleich; kWp je Anlage und spezifischer Ertrag kWh/kWp |
 | **1.5.1** | Die Ecke oben links folgt bei mehreren Anlagen automatisch der Auswahl, auch bei älteren Konfigurationen |

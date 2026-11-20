@@ -4,7 +4,7 @@
  *
  * Installation: siehe README.md
  */
-const CARD_VERSION = '1.6.1';
+const CARD_VERSION = '1.7.0';
 
 const DIRS = ['N', 'NNO', 'NO', 'ONO', 'O', 'OSO', 'SO', 'SSO', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
 const dir16 = (az) => DIRS[Math.round((((az % 360) + 360) % 360) / 22.5) % 16];
@@ -68,6 +68,7 @@ const DEFAULTS = {
   elevation_bands: 9, // Verschattungskarte: Anzahl Höhenringe (9 = 10°)
   season_overlay: true, // Sommer/Winter: andere Jahreszeit als Umriss
   kwp: null,
+  energy_entity: null, // Ertragszähler (kWh) bei nur einem Sensor
   total_name: 'Gesamt',
 };
 
@@ -174,6 +175,7 @@ class HeliosCompassCard extends HTMLElement {
       const kwp = Number(x.kwp) || (hasSources ? kwpOf(ownMods) : 0) || (!hasSources ? Number(config.kwp) || kwpOf(globalModules) : 0);
       return {
         kwp,
+        energy: x.energy_entity ? [x.energy_entity] : (!hasSources && config.energy_entity ? [config.energy_entity] : []),
         id: x.entity,
         entities: [x.entity],
         name: x.name || '',
@@ -199,6 +201,7 @@ class HeliosCompassCard extends HTMLElement {
         color_stops: makeStops(c.total_color_stops, max),
         modules: [...new Set(c.sources.flatMap((x) => x.modules))],
         kwp: c.sources.every((x) => x.kwp > 0) ? c.sources.reduce((a, x) => a + x.kwp, 0) : 0,
+        energy: c.sources.every((x) => x.energy.length) ? c.sources.flatMap((x) => x.energy) : [],
       });
     }
     c.power_entity = c.sources[0].entities[0];
@@ -290,11 +293,14 @@ class HeliosCompassCard extends HTMLElement {
     const cache = this._cache;
     if (cache && cache.key === key && Date.now() - cache.time < this._config.refresh_interval * 1000) {
       this._data = cache.data;
+      this._energy = cache.energy || {};
       this._error = null;
       this._composeSeries();
       this._renderPlot();
       return;
     }
+    const eIds = [...new Set(this._config.sources.flatMap((x) => x.energy))];
+    const energy = {};
     const data = {};
     let error = null;
     try {
@@ -317,6 +323,25 @@ class HeliosCompassCard extends HTMLElement {
             return { t, v: this._config.stats_type === 'max' ? max : mean, vmax: isFinite(max) ? max : mean, dt: 3600 };
           });
           if (series.length) data[id] = { series, peak };
+        });
+      }
+      if (eIds.length) {
+        // Gemessener Ertrag aus den Langzeitstatistiken der Energiezähler
+        const res = await this._hass.callWS({
+          type: 'recorder/statistics_during_period',
+          start_time: new Date(start).toISOString(),
+          end_time: new Date(end).toISOString(),
+          statistic_ids: eIds,
+          period: r.hours <= 24 ? '5minute' : 'hour',
+          types: ['change', 'state'],
+        });
+        eIds.forEach((id) => {
+          const f = this._energyFactor(id);
+          energy[id] = (res?.[id] || []).map((st) => ({
+            t: typeof st.start === 'number' ? st.start : Date.parse(st.start),
+            change: (Number(st.change) || 0) * f,
+            state: Number(st.state) * f,
+          }));
         });
       }
       const missing = ids.filter((id) => !data[id]);
@@ -351,8 +376,10 @@ class HeliosCompassCard extends HTMLElement {
       if (d.peak) d.peak = { ...d.peak, v: d.peak.v * f };
     });
     this._data = data;
+    this._energy = energy;
     this._error = error;
-    if (!error) this._cache = { key, time: Date.now(), data };
+    if (!error) this._cache = { key, time: Date.now(), data, energy };
+    this._fetchToday();
     this._composeSeries();
     this._renderPlot();
   }
@@ -384,6 +411,81 @@ class HeliosCompassCard extends HTMLElement {
   }
 
   _energyOf(series) { return series.reduce((a, p) => a + (p.v * p.dt) / 3600, 0); }
+
+  /** Umrechnung des Energiezählers auf Wh */
+  _energyFactor(id) {
+    const u = this._hass.states[id]?.attributes.unit_of_measurement;
+    if (u === 'kWh') return 1000;
+    if (u === 'MWh') return 1e6;
+    if (u === 'GWh') return 1e9;
+    return 1; // Wh
+  }
+
+  /** Teilstunde seit der letzten Statistik: aktueller Zählerstand minus letzter Stand */
+  _liveTail(id, rows) {
+    const last = rows[rows.length - 1];
+    const cur = parseFloat(this._hass.states[id]?.state) * this._energyFactor(id);
+    if (!last || !isFinite(cur) || !isFinite(last.state)) return 0;
+    return cur >= last.state ? cur - last.state : cur; // Rücksetzung (Tageszähler)
+  }
+
+  /** Gemessener Ertrag einer Anlage im Zeitraum (Wh) oder null */
+  _measured(src, months) {
+    if (!src.energy?.length || !this._energy) return null;
+    let sum = 0;
+    const curMonth = new Date().getMonth() + 1;
+    for (const id of src.energy) {
+      const rows = this._energy[id];
+      if (!rows || !rows.length) return null;
+      rows.forEach((row) => { if (!months || months.includes(new Date(row.t).getMonth() + 1)) sum += row.change; });
+      if (!months || months.includes(curMonth)) sum += this._liveTail(id, rows);
+    }
+    return sum;
+  }
+
+  /** Ertrag heute je Energiezähler (ab Mitternacht) */
+  async _fetchToday() {
+    const eIds = [...new Set(this._config.sources.flatMap((x) => x.energy))];
+    if (!eIds.length || !this._hass) return;
+    const mid = new Date();
+    mid.setHours(0, 0, 0, 0);
+    try {
+      const res = await this._hass.callWS({
+        type: 'recorder/statistics_during_period',
+        start_time: new Date(mid.getTime() - 3600e3).toISOString(),
+        end_time: new Date().toISOString(),
+        statistic_ids: eIds,
+        period: 'hour',
+        types: ['change', 'state'],
+      });
+      const today = {};
+      eIds.forEach((id) => {
+        const f = this._energyFactor(id);
+        const rows = (res?.[id] || []).map((st) => ({
+          t: typeof st.start === 'number' ? st.start : Date.parse(st.start),
+          change: (Number(st.change) || 0) * f,
+          state: Number(st.state) * f,
+        }));
+        today[id] = { sum: rows.filter((x) => x.t >= mid.getTime()).reduce((a, x) => a + x.change, 0), rows };
+      });
+      this._today = today;
+      this._update(true);
+    } catch (e) {
+      console.warn('helios-compass-card: Tagesertrag konnte nicht geladen werden', e);
+    }
+  }
+
+  /** Ertrag heute der Anlage in Wh oder null */
+  _todayEnergy(src = this._src()) {
+    if (!src.energy?.length || !this._today) return null;
+    let sum = 0;
+    for (const id of src.energy) {
+      const d = this._today[id];
+      if (!d) return null;
+      sum += d.sum + this._liveTail(id, d.rows);
+    }
+    return sum;
+  }
 
   /** Zeitreihe der aktiven Anlage (bzw. Summe aller Anlagen) zusammensetzen */
   _composeSeries() {
@@ -522,7 +624,8 @@ class HeliosCompassCard extends HTMLElement {
     }));
     this.shadowRoot.querySelectorAll('.corner').forEach((el) => el.addEventListener('click', () => {
       const cfg = c.corners[el.dataset.pos];
-      const entityId = cfg?.entity || (cfg?.type === 'source' ? this._src().entities[0] : cfg?.type ? c.sun_entity : null);
+      const entityId = cfg?.entity || (cfg?.type === 'source' ? this._src().entities[0]
+        : cfg?.type === 'energy_today' ? (this._src().energy[0] || this._src().entities[0]) : cfg?.type ? c.sun_entity : null);
       if (!entityId) return;
       this.dispatchEvent(new CustomEvent('hass-more-info', { detail: { entityId }, bubbles: true, composed: true }));
     }));
@@ -925,16 +1028,21 @@ class HeliosCompassCard extends HTMLElement {
     const hasData = this._series.length > 0;
     const src = this._src();
     const period = r.months ? `${r.desc}, letzte 12 Mon.` : `letzte ${r.label}`;
-    const spec = src.kwp > 0 && hasData ? `${fmtSpec(agg.totalEnergy / 1000 / src.kwp)} kWh/kWp` : '';
-    set('energy', hasData ? fmtEnergy(agg.totalEnergy) : '–', hasData ? (spec || period) : '');
-    root.querySelector('.stat[data-s="energy"]').title = hasData ? `${fmtEnergy(agg.totalEnergy)} ${period}${spec ? ` · ${spec}` : ''}` : '';
+    const measured = this._measured(src, r.months);
+    const total = measured ?? agg.totalEnergy;
+    const ok = hasData || measured !== null;
+    const spec = src.kwp > 0 && ok ? `${fmtSpec(total / 1000 / src.kwp)} kWh/kWp` : '';
+    root.querySelector('.stat[data-s="energy"] .k').textContent = measured !== null ? 'Ertrag (gemessen)' : 'Ertrag';
+    set('energy', ok ? fmtEnergy(total) : '–', ok ? (spec || period) : '');
+    root.querySelector('.stat[data-s="energy"]').title = ok
+      ? `${fmtEnergy(total)} ${period}${spec ? ` · ${spec}` : ''}\n${measured !== null ? 'Gemessen mit dem Energiezähler' : 'Berechnet aus dem Leistungsverlauf'}` : '';
     // Vergleich der Anlagen: spezifischer Ertrag
     const yieldEl = root.querySelector('.yield');
     if (yieldEl) {
       const withKwp = this._config.sources.filter((x) => x.kwp > 0);
       if (withKwp.length > 1 && hasData) {
         yieldEl.innerHTML = `Spezifischer Ertrag (${esc(r.months ? r.desc : r.label)}): ${withKwp.map((x) => {
-          const e = this._energyOf(this._rawSeries(x, r.months).series);
+          const e = this._measured(x, r.months) ?? this._energyOf(this._rawSeries(x, r.months).series);
           return `${esc(x.name || x.entities[0])} <b>${fmtSpec(e / 1000 / x.kwp)}</b>`;
         }).join(' · ')} kWh/kWp`;
       } else yieldEl.innerHTML = '';
@@ -965,6 +1073,11 @@ class HeliosCompassCard extends HTMLElement {
       const p = this._livePower();
       return p >= 1000 ? `${fmtNum(p / 1000, p >= 10000 ? 1 : 2)}kW` : `${fmtNum(p)}W`;
     }
+    if (cfg.type === 'energy_today') {
+      const wh = this._todayEnergy();
+      if (wh === null) return this._src().energy?.length ? '…' : '–';
+      return wh >= 1000 ? `${fmtNum(wh / 1000, wh >= 100000 ? 0 : wh >= 10000 ? 1 : 2)}kWh` : `${fmtNum(wh)}Wh`;
+    }
     const st = this._hass.states[cfg.entity];
     if (!st) return '–';
     const n = parseFloat(st.state);
@@ -980,7 +1093,7 @@ class HeliosCompassCard extends HTMLElement {
     const sun = this._sunNow();
     const src = this._src();
     const power = this._livePower(src);
-    const sig = `${this._showPaths}|${this._sourceId}|${sun.azimuth.toFixed(1)}|${sun.elevation.toFixed(1)}|${power}|`
+    const sig = `${this._showPaths}|${this._sourceId}|${sun.azimuth.toFixed(1)}|${sun.elevation.toFixed(1)}|${power}|${src.energy.map((e) => this._hass.states[e]?.state).join(',')}|`
       + Object.values(c.corners).map((x) => (x?.entity ? this._hass.states[x.entity]?.state : '')).join('|');
     if (!force && sig === this._sig) return;
     this._sig = sig;
@@ -990,6 +1103,7 @@ class HeliosCompassCard extends HTMLElement {
       let lbl = cfg?.name;
       if (lbl === undefined || lbl === null) {
         if (cfg?.type === 'source') lbl = c.sources.length > 1 && src.name ? `${src.name}-Leistung` : 'PV-Leistung';
+        else if (cfg?.type === 'energy_today') lbl = c.sources.length > 1 && src.name ? `${src.name} heute` : 'Ertrag heute';
         else lbl = cfg?.entity ? this._hass.states[cfg.entity]?.attributes.friendly_name : '';
       }
       el.querySelector('.lbl').textContent = lbl ?? '';
@@ -1066,6 +1180,7 @@ const LABELS = {
   longitude: 'Längengrad (leer = HA-Standort)',
   unit_factor: 'Umrechnungsfaktor auf W (leer = automatisch)',
   kwp: 'Anlagenleistung in kWp',
+  energy_entity: 'Ertragszähler (kWh) – optional',
   show_sun_paths: 'Sonnenbahnen einzeichnen',
   sun_path_toggle: '☀-Knopf in der Karte zum Ein-/Ausblenden der Sonnenbahnen',
   metrics: 'Angezeigte Ansichten (Umschalter)',
@@ -1081,6 +1196,7 @@ const HELPERS = {
   image_offset_y: 'In % des Kompassradius, damit das Haus genau in der Mitte sitzt.',
   sectors: '36 = 10° breite Sektoren, 16 = eine pro Kompassrichtung',
   elevation_bands: '9 = Ringe à 10° Sonnenhöhe. Für die Schatten-Ansicht am besten „1 Jahr“ wählen.',
+  energy_entity: 'Energiesensor in kWh/Wh, z. B. Gesamt- oder Tagesertrag des Wechselrichters. Dann sind Ertrag, kWh/kWp und „Ertrag heute“ exakt gemessen statt berechnet.',
   kwp: 'In Kilowatt-Peak: 750 Wp = 0,75 kWp. Leer = Summe der kWp aus den Modulfeldern.',
   max_power: 'Obergrenze der Leistungsklassen, z. B. 800 W für ein BKW.',
   metrics: 'Abgewählte Ansichten verschwinden aus dem Umschalter, z. B. „Schatten“.',
@@ -1097,6 +1213,7 @@ const SECTIONS = [
       { name: 'legend_label', selector: { text: {} } },
     ] },
     { name: 'kwp', selector: num(0.01, 10000, 0.01, 'kWp') },
+    { name: 'energy_entity', selector: { entity: { domain: 'sensor', device_class: 'energy' } } },
   ] },
   { key: 'display', title: 'Darstellung', icon: '🧭', schema: [
     { type: 'grid', name: '', schema: [
@@ -1150,7 +1267,8 @@ const SECTIONS = [
 
 const CORNER_SCHEMA = [
   { name: 'mode', selector: { select: { mode: 'dropdown', options: [
-    { value: 'source', label: 'Leistung der gewählten Anlage' }, { value: 'entity', label: 'Beliebige Entität' },
+    { value: 'source', label: 'Leistung der gewählten Anlage' }, { value: 'energy_today', label: 'Ertrag heute der gewählten Anlage' },
+    { value: 'entity', label: 'Beliebige Entität' },
     { value: 'azimuth', label: 'Sonnenazimut' }, { value: 'elevation', label: 'Sonnenhöhe' }, { value: 'none', label: 'Ausblenden' }] } } },
   { name: 'name', selector: { text: {} } },
 ];
@@ -1171,6 +1289,7 @@ const SOURCE_SCHEMA = [
     { name: 'legend_label', selector: { text: {} } },
   ] },
   { name: 'kwp', selector: num(0.01, 10000, 0.01, 'kWp') },
+  { name: 'energy_entity', selector: { entity: { domain: 'sensor', device_class: 'energy' } } },
 ];
 const MODULE_SCHEMA = [
   { type: 'grid', name: '', schema: [
@@ -1490,8 +1609,8 @@ class HeliosCompassCardEditor extends HTMLElement {
     }
     let schema = sec.schema;
     if (sec.key === 'general' && (w.sources || []).length) {
-      schema = schema.filter((x) => x.name !== 'power_entity' && x.name !== 'kwp');
-      body.append(this._hint('Mehrere Anlagen sind aktiv: Sensoren und kWp stellst du unter „🔆 Anlagen“ ein. Die maximale Leistung hier gilt für Anlagen ohne eigene Angabe.'));
+      schema = schema.filter((x) => !['power_entity', 'kwp', 'energy_entity'].includes(x.name));
+      body.append(this._hint('Mehrere Anlagen sind aktiv: Sensoren, Ertragszähler und kWp stellst du unter „🔆 Anlagen“ ein. Die maximale Leistung hier gilt für Anlagen ohne eigene Angabe.'));
     }
     const keys = schemaKeys(schema);
     const data = {};
