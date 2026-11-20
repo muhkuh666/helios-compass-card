@@ -1,11 +1,20 @@
 # ☀️ Helios Compass Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
+[![Validate](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml/badge.svg)](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml)
+![Lizenz](https://img.shields.io/github/license/muhkuh666/helios-compass-card)
 ![Version](https://img.shields.io/badge/version-1.6.1-orange.svg)
 
 **PV-Sonnenkompass für Home Assistant.** Die Karte zeigt, aus welcher Himmelsrichtung deine Solaranlage wie viel liefert. Jeder Sektor der Rose steht für eine Sonnenrichtung. Die Farben zeigen die Leistungsklassen, die Länge den Anteil an Zeit oder Ertrag. Darunter liegt auf Wunsch ein Luftbild deines Hauses.
 
 Geeignet für Balkonkraftwerke, Dachanlagen und beides zusammen.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/muhkuh666/helios-compass-card/main/images/zeit.png" alt="Ansicht Zeit mit Sonnenbahnen" width="32%">
+  <img src="https://raw.githubusercontent.com/muhkuh666/helios-compass-card/main/images/schatten.png" alt="Ansicht Schatten (Verschattungskarte)" width="32%">
+  <img src="https://raw.githubusercontent.com/muhkuh666/helios-compass-card/main/images/sommer-winter.png" alt="Sommer mit Winter zum Vergleich" width="32%">
+</p>
+<p align="center"><sub>Links: Ansicht „Zeit“ über 1 Jahr mit Sonnenbahnen · Mitte: Verschattungskarte · Rechts: Sommer mit Winter gestrichelt zum Vergleich</sub></p>
 
 [![In HACS öffnen](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=muhkuh666&repository=helios-compass-card&category=plugin)
 
@@ -408,3 +417,9 @@ mode: single
 | **1.2.0** | Ansichten Zeit / Ertrag / Ø Leistung, Kennzahlen, Modulausrichtung, erster grafischer Editor |
 | **1.1.0** | Solarrose mit Sektoren statt Punkten |
 | **1.0.0** | Erste Version |
+
+---
+
+## Lizenz
+
+[MIT](LICENSE) © muhkuh666
