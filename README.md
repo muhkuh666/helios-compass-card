@@ -1,7 +1,7 @@
 # ☀️ Helios Compass Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
-![Version](https://img.shields.io/badge/version-1.5.1-orange.svg)
+![Version](https://img.shields.io/badge/version-1.6.0-orange.svg)
 
 **PV-Sonnenkompass für Home Assistant.** Die Karte zeigt, aus welcher Himmelsrichtung deine Solaranlage wie viel liefert. Jeder Sektor der Rose steht für eine Sonnenrichtung. Die Farben zeigen die Leistungsklassen, die Länge den Anteil an Zeit oder Ertrag. Darunter liegt auf Wunsch ein Luftbild deines Hauses.
 
@@ -14,11 +14,14 @@ Geeignet für Balkonkraftwerke, Dachanlagen und beides zusammen.
 ## Funktionen
 
 - **Solarrose:** 16-teilige Kompassrose (N, NNO, NO … NNW) mit Sektoren nach Sonnenrichtung, gestapelt nach Leistungsklassen.
-- **Drei Ansichten** per Umschalter:
+- **Vier Ansichten** per Umschalter:
   - **Zeit:** Wie lange kam die Sonne aus welcher Richtung?
   - **Ertrag:** Wie viel kWh kamen aus welcher Richtung?
-  - **Ø Leistung:** Durchschnittsleistung je Richtung. Damit erkennst du Verschattung.
-- **Zeiträume:** 1, 8, 12 und 24 Stunden sowie 7 und 14 Tage.
+  - **Ø Leistung:** Durchschnittsleistung je Richtung.
+  - **Schatten:** Verschattungskarte aus Richtung × Sonnenhöhe. Sie zeigt, bei welchem Sonnenstand Bäume oder Nachbarhäuser Schatten werfen.
+- **Sonnenbahnen:** die heutige Bahn mit Uhrzeiten, Auf- und Untergang sowie die Bahnen am längsten (21.6.) und kürzesten Tag (21.12.).
+- **Zeiträume:** 1, 8, 12 und 24 Stunden, 7, 14 und 30 Tage, 1 Jahr, außerdem **Sommer** und **Winter** mit der jeweils anderen Jahreszeit als Vergleich.
+- **Ertrag pro kWp:** spezifischer Ertrag je Anlage, z. B. „BKW 1,8 · Dach 1,5 kWh/kWp“ für einen fairen Vergleich.
 - **Mehrere Anlagen:** z. B. BKW, Dach und „Gesamt“ (Summe) per Umschalter in einer Karte.
 - **Kennzahlen:** Ertrag im Zeitraum, Spitzenleistung mit Zeitpunkt und Richtung, beste Richtung.
 - **Modulausrichtung:** gestrichelte Pfeile mit Name und Neigung für jedes Modulfeld.
@@ -81,11 +84,11 @@ Der Editor ist in Abschnitte gegliedert. Die Vorschau aktualisiert sich bei jede
 
 | Abschnitt | Inhalt |
 |---|---|
-| ⚙️ **Allgemein** | Titel, PV-Sensor, maximale Leistung, Beschriftung der Farbskala |
-| 🧭 **Darstellung** | Standard-Ansicht, Standard-Zeitraum, angezeigte Zeitraum-Buttons, Anzahl und Deckkraft der Sektoren, Umschalter, Kennzahlen und Farbskala ein/aus |
+| ⚙️ **Allgemein** | Titel, PV-Sensor, maximale Leistung, Beschriftung der Farbskala, kWp |
+| 🧭 **Darstellung** | Standard-Ansicht, Standard-Zeitraum, angezeigte Zeitraum-Buttons, Sommer/Winter-Vergleich, Sonnenbahnen, Anzahl und Deckkraft der Sektoren, Höhenringe der Schatten-Ansicht, Umschalter, Kennzahlen und Farbskala ein/aus |
 | 🏠 **Hausbild** | Bildpfad, Drehung, Verschieben, Größe, Deckkraft, runder Zuschnitt |
 | 🔲 **Werte in den Ecken** | je Ecke: Leistung der gewählten Anlage, beliebige Entität (mit Einheit und Nachkommastellen), Sonnenazimut, Sonnenhöhe oder ausblenden |
-| 🔆 **Anlagen** | mehrere Sensoren mit eigenen Modulfeldern und Leistungsklassen, Summe „Gesamt“, Standard-Anlage |
+| 🔆 **Anlagen** | mehrere Sensoren mit kWp, eigenen Modulfeldern und Leistungsklassen, Summe „Gesamt“, Standard-Anlage |
 | 📐 **Modulausrichtung** | Modulfelder für alle Anlagen: Name, Farbe, Azimut, Neigung, kWp |
 | 🎨 **Leistungsklassen & Farben** | automatisch oder einzeln bearbeitbar, mit Farbwähler |
 | 🛠️ **Erweitert** | Sonnen-Entität, Stundenwert für 7/14 Tage, Aktualisierung, Standort, Umrechnungsfaktor |
@@ -94,15 +97,66 @@ Listen (Anlagen, Modulfelder, Farbstufen) lassen sich hinzufügen, entfernen und
 
 ---
 
-## Die drei Ansichten
+## Die vier Ansichten
 
-| Ansicht | Länge eines Sektors | Legende | Wofür? |
+| Ansicht | Darstellung | Legende | Wofür? |
 |---|---|---|---|
 | **Zeit** | Anteil der Sonnenzeit aus dieser Richtung | Zeitanteil je Leistungsklasse | Wann steht die Sonne wo, und wie viel kommt dabei an? |
 | **Ertrag** | Anteil am Ertrag (kWh) aus dieser Richtung | Ertragsanteil je Leistungsklasse | Aus welcher Richtung kommt meine Energie? |
-| **Ø Leistung** | Durchschnittsleistung bei Sonne aus dieser Richtung | Zeitanteil je Leistungsklasse | Wo werfen Bäume oder Nachbarhäuser Schatten? |
+| **Ø Leistung** | Durchschnittsleistung bei Sonne aus dieser Richtung | Zeitanteil je Leistungsklasse | Welche Richtung liefert im Schnitt am meisten? |
+| **Schatten** | Raster aus Richtung × Sonnenhöhe (Rand = Horizont, Mitte = Zenit), Farbe = Ø Leistung | Zeitanteil je Leistungsklasse | Bei welchem Sonnenstand gibt es Schatten? |
 
 Gezählt wird nur die Zeit, in der die Sonne über dem Horizont steht.
+
+**Tipp für die Schatten-Ansicht:** Wähle **1 Jahr**, damit möglichst viele Sonnenstände vorkommen. Ein Bereich, der dunkler ist als seine Nachbarn bei gleicher Höhe, deutet auf Verschattung hin. Typisch sind tief stehende Sonne im Winter und Bäume im Südwesten.
+
+---
+
+## Sonnenbahnen
+
+Die Karte zeichnet über die Rose:
+
+- **Heute** (orange): mit Stundenpunkten, Uhrzeiten alle 3 Stunden sowie Auf- ↑ und Untergang ↓ mit Uhrzeit.
+- **21.6.** (gelb, gestrichelt): längster Tag, höchste Sonnenbahn.
+- **21.12.** (blau, gestrichelt): kürzester Tag, niedrigste Sonnenbahn.
+- **Sonne jetzt:** als leuchtender Punkt auf der heutigen Bahn.
+
+Bei den Bahnen gilt: Abstand zur Mitte = Sonnenhöhe (Rand = Horizont, Mitte = Zenit). Zusammen mit dem Hausbild siehst du, welche Dachfläche zu welcher Jahreszeit wann Sonne bekommt. Fährst du über eine Bahn, erscheinen Auf- und Untergang, Richtung und Mittagshöhe.
+
+```yaml
+show_sun_paths: true
+sun_paths: [today, summer, winter]
+```
+
+---
+
+## Lange Zeiträume & Jahreszeiten
+
+| Button | Zeitraum |
+|---|---|
+| 30 Tage | die letzten 30 Tage |
+| 1 Jahr | die letzten 365 Tage |
+| Sommer | April bis September der letzten 12 Monate |
+| Winter | Oktober bis März der letzten 12 Monate |
+
+Bei **Sommer** und **Winter** erscheint die jeweils andere Jahreszeit als **gestrichelter Umriss** zum Vergleich (`season_overlay`). Alle Zeiträume ab 7 Tagen nutzen die Langzeitstatistiken, die Home Assistant dauerhaft speichert. 1 Jahr, Sommer und Winter teilen sich dieselben Daten und laden nur einmal.
+
+---
+
+## Ertrag pro kWp
+
+Gibst du die Anlagenleistung in kWp an, zeigt die Karte den **spezifischen Ertrag** in kWh/kWp:
+
+- Bei **Ertrag** steht er unter dem Ertrag der gewählten Anlage.
+- Bei mehreren Anlagen erscheint unter den Kennzahlen ein Vergleich, z. B. *Spezifischer Ertrag (1 Jahr): BKW 980 · Dach 1.050 · Gesamt 1.040 kWh/kWp*.
+
+```yaml
+sources:
+  - {name: BKW, entity: sensor.bkw_leistung, max_power: 800, kwp: 0.8}
+  - {name: Dach, entity: sensor.dach_leistung, max_power: 8000, kwp: 6.0}
+```
+
+Ohne `kwp` nimmt die Karte die Summe der `kwp`-Angaben aus den Modulfeldern der Anlage. Bei nur einem Sensor gibt es `kwp` auf oberster Ebene.
 
 ---
 
@@ -223,11 +277,16 @@ Die Standardbelegung: oben links die Leistung der gewählten Anlage, oben rechts
 | `title` | `Helios Compass Card` | Kartentitel, `""` blendet ihn aus |
 | `max_power` | `8000` | Obergrenze der Leistungsklassen in W, z. B. `800` für ein BKW |
 | `legend_label` | `PV-Leistung` | Beschriftung der Farbskala |
-| `metric` | `time` | Standard-Ansicht: `time`, `energy` oder `avg_power` |
-| `show_metric_switch` | `true` | Umschalter Zeit / Ertrag / Ø Leistung anzeigen |
+| `kwp` | Summe aus `modules` | Anlagenleistung für kWh/kWp (bei nur einem Sensor) |
+| `metric` | `time` | Standard-Ansicht: `time`, `energy`, `avg_power` oder `shading` |
+| `show_metric_switch` | `true` | Umschalter Zeit / Ertrag / Ø Leistung / Schatten anzeigen |
 | `show_stats` | `true` | Kennzahlen-Zeile anzeigen |
 | `show_legend` | `true` | Farbskala anzeigen |
-| `ranges` | `[1h, 8h, 12h, 24h, 7d, 14d]` | angezeigte Zeitraum-Buttons |
+| `ranges` | alle | angezeigte Zeitraum-Buttons: `1h`, `8h`, `12h`, `24h`, `7d`, `14d`, `30d`, `1y`, `summer`, `winter` |
+| `season_overlay` | `true` | bei Sommer/Winter die andere Jahreszeit gestrichelt zeigen |
+| `show_sun_paths` | `true` | Sonnenbahnen einzeichnen |
+| `sun_paths` | `[today, summer, winter]` | welche Bahnen: heute, 21.6., 21.12. |
+| `elevation_bands` | `9` | Schatten-Ansicht: Anzahl Höhenringe (9 = 10°) |
 | `default_range` | `8h` | Start-Zeitraum |
 | `sectors` | `36` | Anzahl Richtungssektoren (36 = 10° breit, 16 = Kompassrichtungen) |
 | `sector_opacity` | `0.8` | Deckkraft der Sektoren |
@@ -267,6 +326,7 @@ Die Standardbelegung: oben links die Leistung der gewählten Anlage, oben rechts
 | `entity` | **Pflicht**, Leistungssensor (W oder kW) |
 | `name` | Name im Umschalter und in der Legende |
 | `max_power` | Obergrenze der Leistungsklassen dieser Anlage |
+| `kwp` | Anlagenleistung in kWp (für kWh/kWp) |
 | `color_stops` | eigene Farbstufen |
 | `modules` | eigene Modulfelder |
 | `legend_label` | eigene Beschriftung der Farbskala |
@@ -276,7 +336,7 @@ Die Standardbelegung: oben links die Leistung der gewählten Anlage, oben rechts
 | Option | Standard | Beschreibung |
 |---|---|---|
 | `sun_entity` | `sun.sun` | Quelle für den aktuellen Sonnenstand |
-| `stats_type` | `mean` | für 7/14 Tage: Stundenmittel (`mean`) oder Spitze (`max`) |
+| `stats_type` | `mean` | ab 7 Tagen: Stundenmittel (`mean`) oder Spitze (`max`) |
 | `refresh_interval` | `300` | Verlauf neu laden alle x Sekunden |
 | `latitude` / `longitude` | HA-Standort | Standort überschreiben |
 | `unit_factor` | automatisch | Umrechnungsfaktor auf W, nur nötig bei ungewöhnlichen Einheiten |
@@ -315,10 +375,10 @@ mode: single
   - Prüfe, ob `/hacsfiles/helios-compass-card/helios-compass-card.js` im Browser Code anzeigt.
   - Prüfe, ob die Ressource unter Einstellungen → Dashboards → Ressourcen eingetragen ist.
   - Lade danach mit Strg+F5 neu.
-- **7 und 14 Tage** nutzen die Langzeitstatistiken. Der Sensor braucht dafür `state_class: measurement`. Fehlen sie, nutzt die Karte den normalen Verlauf, soweit der Recorder so weit zurückreicht.
+- **Zeiträume ab 7 Tagen** nutzen die Langzeitstatistiken. Der Sensor braucht dafür `state_class: measurement`. Fehlen sie, nutzt die Karte den normalen Verlauf, soweit der Recorder so weit zurückreicht.
 - **1 bis 24 Stunden** stammen aus dem Recorder-Verlauf mit 1- bzw. 5-Minuten-Auflösung.
 - Den **Ertrag** berechnet die Karte aus dem Leistungsverlauf. Er kann daher leicht vom Zählerstand des Wechselrichters abweichen.
-- Bei 7/14 Tagen ist die **Spitze für „Gesamt“** eine obere Abschätzung, weil stündliche Höchstwerte addiert werden.
+- Ab 7 Tagen ist die **Spitze für „Gesamt“** eine obere Abschätzung, weil stündliche Höchstwerte addiert werden.
 - Die Zahlen sind deutsch formatiert. Die Karte unterstützt den hellen und dunklen Modus über die Theme-Farben von Home Assistant.
 
 ---
@@ -327,6 +387,7 @@ mode: single
 
 | Version | Änderungen |
 |---|---|
+| **1.6.0** | Sonnenbahnen (heute mit Auf-/Untergang, 21.6., 21.12.); Ansicht „Schatten“ (Richtung × Sonnenhöhe); Zeiträume 30 Tage, 1 Jahr, Sommer, Winter mit Vergleich; kWp je Anlage und spezifischer Ertrag kWh/kWp |
 | **1.5.1** | Die Ecke oben links folgt bei mehreren Anlagen automatisch der Auswahl, auch bei älteren Konfigurationen |
 | **1.5.0** | Grafischer Editor für alle Optionen: Listen für Anlagen, Modulfelder und Farbstufen mit Farbwähler; Ecken mit Einheit und Nachkommastellen |
 | **1.4.0** | Hausbild verschieben und rund zuschneiden, feinere Drehung; Zeitraum 12 Std.; Name „Helios Compass Card“ |

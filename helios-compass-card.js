@@ -4,7 +4,7 @@
  *
  * Installation: siehe README.md
  */
-const CARD_VERSION = '1.5.1';
+const CARD_VERSION = '1.6.0';
 
 const DIRS = ['N', 'NNO', 'NO', 'ONO', 'O', 'OSO', 'SO', 'SSO', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
 const dir16 = (az) => DIRS[Math.round((((az % 360) + 360) % 360) / 22.5) % 16];
@@ -16,12 +16,23 @@ const RANGES = {
   '24h': { label: '24 Std.', hours: 24, step: 300 },
   '7d': { label: '7 Tage', hours: 168, step: 3600, stats: true },
   '14d': { label: '14 Tage', hours: 336, step: 3600, stats: true },
+  '30d': { label: '30 Tage', hours: 720, step: 3600, stats: true },
+  '1y': { label: '1 Jahr', hours: 8760, step: 3600, stats: true },
+  summer: { label: 'Sommer', hours: 8760, step: 3600, stats: true, months: [4, 5, 6, 7, 8, 9], compare: 'winter', desc: 'Apr–Sep' },
+  winter: { label: 'Winter', hours: 8760, step: 3600, stats: true, months: [10, 11, 12, 1, 2, 3], compare: 'summer', desc: 'Okt–Mär' },
 };
 
 const METRICS = {
   time: { label: 'Zeit', legend: 'Zeitanteil je Leistungsklasse (Sonnenzeit)' },
   energy: { label: 'Ertrag', legend: 'Ertragsanteil je Leistungsklasse' },
   avg_power: { label: 'Ø Leistung', legend: 'Zeitanteil je Leistungsklasse (Sonnenzeit)' },
+  shading: { label: 'Schatten', legend: 'Zeitanteil je Leistungsklasse (Sonnenzeit)' },
+};
+
+const SUN_PATHS = {
+  today: { label: 'Heute', color: '#ff9800', dash: '' },
+  summer: { label: '21.6.', color: '#eab308', dash: '4 3' },
+  winter: { label: '21.12.', color: '#60a5fa', dash: '4 3' },
 };
 
 const DEFAULT_COLORS = ['#1e40af', '#2563eb', '#38bdf8', '#2dd4bf', '#22c55e', '#a3e635', '#facc15', '#f97316', '#dc2626'];
@@ -30,12 +41,12 @@ const DEFAULTS = {
   title: 'Helios Compass Card',
   sun_entity: 'sun.sun',
   max_power: 8000,
-  metric: 'time', // 'time' | 'energy' | 'avg_power'
+  metric: 'time', // 'time' | 'energy' | 'avg_power' | 'shading'
   show_metric_switch: true,
   show_stats: true,
   sectors: 36,
   sector_opacity: 0.8,
-  ranges: ['1h', '8h', '12h', '24h', '7d', '14d'],
+  ranges: ['1h', '8h', '12h', '24h', '7d', '14d', '30d', '1y', 'summer', 'winter'],
   default_range: '8h',
   image: null,
   image_scale: 0.8,
@@ -50,6 +61,11 @@ const DEFAULTS = {
   legend_label: 'PV-Leistung',
   modules: [],
   show_total: null, // null = automatisch bei mehreren Anlagen
+  show_sun_paths: true,
+  sun_paths: ['today', 'summer', 'winter'],
+  elevation_bands: 9, // Verschattungskarte: Anzahl Höhenringe (9 = 10°)
+  season_overlay: true, // Sommer/Winter: andere Jahreszeit als Umriss
+  kwp: null,
   total_name: 'Gesamt',
 };
 
@@ -109,6 +125,7 @@ function niceStep(max) {
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const fmtNum = (v, dec = 0) => Number(v).toLocaleString('de-DE', { maximumFractionDigits: dec, minimumFractionDigits: 0 });
+const fmtSpec = (v) => fmtNum(v, v >= 100 ? 0 : v >= 10 ? 1 : 2);
 const fmtPct = (v) => fmtNum(v, v >= 10 ? 0 : 1);
 const fmtPower = (w) => (Math.abs(w) >= 1000 ? `${fmtNum(w / 1000, Math.abs(w) >= 10000 ? 1 : 2)} kW` : `${fmtNum(w)} W`);
 const fmtEnergy = (wh) => (wh >= 1000 ? `${fmtNum(wh / 1000, wh >= 100000 ? 0 : wh >= 10000 ? 1 : 2)} kWh` : `${fmtNum(wh)} Wh`);
@@ -143,16 +160,22 @@ class HeliosCompassCard extends HTMLElement {
     c.max_power = Number(c.max_power) || 8000;
     c.sectors = Math.max(4, Math.min(180, Math.round(Number(c.sectors) || 36)));
     const globalModules = Array.isArray(c.modules) ? c.modules.filter(validModule) : [];
+    const kwpOf = (mods) => mods.reduce((a, m) => a + (Number(m.kwp) || 0), 0);
+    c.elevation_bands = Math.max(3, Math.min(30, Math.round(Number(c.elevation_bands) || 9)));
+    c.sun_paths = Array.isArray(c.sun_paths) ? c.sun_paths.filter((k) => SUN_PATHS[k]) : DEFAULTS.sun_paths;
     const raw = hasSources ? config.sources.filter((x) => x && x.entity) : [{ entity: config.power_entity }];
     c.sources = raw.map((x) => {
       const max = Number(x.max_power) || c.max_power;
+      const ownMods = Array.isArray(x.modules) ? x.modules.filter(validModule) : [];
+      const kwp = Number(x.kwp) || (hasSources ? kwpOf(ownMods) : 0) || (!hasSources ? Number(config.kwp) || kwpOf(globalModules) : 0);
       return {
+        kwp,
         id: x.entity,
         entities: [x.entity],
         name: x.name || '',
         max_power: max,
         color_stops: makeStops(Array.isArray(x.color_stops) ? x.color_stops : (x.max_power ? null : config.color_stops), max),
-        modules: [...globalModules, ...(Array.isArray(x.modules) ? x.modules.filter(validModule) : [])],
+        modules: [...globalModules, ...ownMods],
         legend_label: x.legend_label,
       };
     });
@@ -171,6 +194,7 @@ class HeliosCompassCard extends HTMLElement {
         max_power: max,
         color_stops: makeStops(c.total_color_stops, max),
         modules: [...new Set(c.sources.flatMap((x) => x.modules))],
+        kwp: c.sources.every((x) => x.kwp > 0) ? c.sources.reduce((a, x) => a + x.kwp, 0) : 0,
       });
     }
     c.power_entity = c.sources[0].entities[0];
@@ -256,6 +280,15 @@ class HeliosCompassCard extends HTMLElement {
     const end = Date.now();
     const start = end - r.hours * 3600e3;
     const ids = [...new Set(this._config.sources.flatMap((x) => x.entities))];
+    const key = `${r.stats ? 's' : 'h'}${r.hours}`;
+    const cache = this._cache;
+    if (cache && cache.key === key && Date.now() - cache.time < this._config.refresh_interval * 1000) {
+      this._data = cache.data;
+      this._error = null;
+      this._composeSeries();
+      this._renderPlot();
+      return;
+    }
     const data = {};
     let error = null;
     try {
@@ -313,14 +346,13 @@ class HeliosCompassCard extends HTMLElement {
     });
     this._data = data;
     this._error = error;
+    if (!error) this._cache = { key, time: Date.now(), data };
     this._composeSeries();
     this._renderPlot();
   }
 
-  /** Zeitreihe der aktiven Anlage (bzw. Summe aller Anlagen) zusammensetzen */
-  _composeSeries() {
-    const src = this._src();
-    const { lat, lon } = this._location();
+  /** Zeitreihe einer Anlage (bzw. Summe), optional auf Monate gefiltert */
+  _rawSeries(src, months) {
     const lists = src.entities.map((e) => this._data[e]).filter(Boolean);
     let series = [];
     let peak = null;
@@ -335,10 +367,29 @@ class HeliosCompassCard extends HTMLElement {
         m.set(p.t, o);
       }));
       series = [...m.values()].sort((x, y) => x.t - y.t);
-      series.forEach((p) => { if (!peak || p.vmax > peak.v) peak = { v: p.vmax, t: p.t }; });
+      peak = null;
     }
-    this._series = series.map((p) => ({ ...p, ...sunPosition(new Date(p.t), lat, lon) }));
+    if (months) series = series.filter((p) => months.includes(new Date(p.t).getMonth() + 1));
+    if (months || lists.length > 1 || !peak) {
+      peak = null;
+      series.forEach((p) => { const v = p.vmax ?? p.v; if (!peak || v > peak.v) peak = { v, t: p.t }; });
+    }
+    return { series, peak };
+  }
+
+  _energyOf(series) { return series.reduce((a, p) => a + (p.v * p.dt) / 3600, 0); }
+
+  /** Zeitreihe der aktiven Anlage (bzw. Summe aller Anlagen) zusammensetzen */
+  _composeSeries() {
+    const src = this._src();
+    const r = RANGES[this._range];
+    const { lat, lon } = this._location();
+    const withSun = (list) => list.map((p) => ({ ...p, ...sunPosition(new Date(p.t), lat, lon) }));
+    const { series, peak } = this._rawSeries(src, r.months);
+    this._series = withSun(series);
     this._peak = peak ? { ...peak, ...sunPosition(new Date(peak.t), lat, lon) } : null;
+    this._compare = r.compare && this._config.season_overlay
+      ? withSun(this._rawSeries(src, RANGES[r.compare].months).series) : null;
   }
 
   _bin(v) {
@@ -397,6 +448,12 @@ class HeliosCompassCard extends HTMLElement {
         .buttons button.active { color:#e53935; border-color:#e53935; }
         .err { font-size:.75em; color: var(--error-color, #db4437); text-align:center; }
         .wedge { transition: opacity .2s; } .wedge:hover { opacity:1 !important; }
+        .buttons.many button { flex: 1 0 calc(20% - 6px); max-width:none; }
+        .note { font-size:.72em; color: var(--secondary-text-color); text-align:center; margin-top:4px; min-height:0; }
+        .note:empty { display:none; }
+        .yield { font-size:.75em; color: var(--secondary-text-color); margin-top:6px; text-align:center; }
+        .yield:empty { display:none; }
+        .yield b { color: var(--primary-text-color); font-weight:500; }
       </style>
       <ha-card>
         ${c.title || c.show_metric_switch ? `<div class="top">
@@ -406,17 +463,18 @@ class HeliosCompassCard extends HTMLElement {
         ${c.sources.length > 1 ? `<div class="sources">${c.sources.map((x) => `<button data-src="${esc(x.id)}">${esc(x.name || this._hass?.states[x.entities[0]]?.attributes.friendly_name || x.entities[0])}</button>`).join('')}</div>` : ''}
         <div class="plot">
           <svg class="rose" viewBox="-160 -160 320 320" preserveAspectRatio="xMidYMid meet">
-            <g class="static"></g><g class="trace"></g><g class="modules"></g><g class="sun"></g>
+            <g class="static"></g><g class="trace"></g><g class="paths"></g><g class="modules"></g><g class="sun"></g>
           </svg>
           ${corner('top_left')}${corner('top_right')}${corner('bottom_left')}${corner('bottom_right')}
         </div>
+        <div class="note"></div>
         ${c.show_legend ? `<div class="legend">${this._legendHtml()}</div>` : ''}
         ${c.show_stats ? `<div class="stats">
           <div class="stat" data-s="energy"><div class="k">Ertrag</div><div class="v">–</div><div class="s">&nbsp;</div></div>
           <div class="stat" data-s="peak"><div class="k">Spitze</div><div class="v">–</div><div class="s">&nbsp;</div></div>
           <div class="stat" data-s="best"><div class="k">Beste Richtung</div><div class="v">–</div><div class="s">&nbsp;</div></div>
-        </div>` : ''}
-        <div class="buttons">${c.ranges.map((r) => `<button data-r="${r}">${RANGES[r].label}</button>`).join('')}</div>
+        </div><div class="yield"></div>` : ''}
+        <div class="buttons${c.ranges.length > 6 ? ' many' : ''}">${c.ranges.map((r) => `<button data-r="${r}">${RANGES[r].label}</button>`).join('')}</div>
         <div class="err"></div>
       </ha-card>`;
 
@@ -450,6 +508,7 @@ class HeliosCompassCard extends HTMLElement {
     }));
     this._renderStatic();
     this._renderModules();
+    this._renderSunPaths();
     this._markButtons();
     this._built = true;
   }
@@ -543,17 +602,99 @@ class HeliosCompassCard extends HTMLElement {
     this.shadowRoot.querySelector('g.modules').innerHTML = s;
   }
 
+  /* ---------- Sonnenbahnen ---------- */
+  _sunDay(date) {
+    const { lat, lon } = this._location();
+    const d0 = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0).getTime();
+    const step = 5 * 60e3;
+    const pts = [];
+    for (let t = d0; t <= d0 + 86400e3; t += step) pts.push({ t, ...sunPosition(new Date(t), lat, lon) });
+    const cross = (a, b) => {
+      const tt = a.t + ((0 - a.elevation) / (b.elevation - a.elevation)) * (b.t - a.t);
+      return { t: tt, ...sunPosition(new Date(tt), lat, lon) };
+    };
+    let rise = null;
+    let set = null;
+    let top = null;
+    for (let i = 1; i < pts.length; i++) {
+      if (pts[i - 1].elevation < 0 && pts[i].elevation >= 0 && !rise) rise = cross(pts[i - 1], pts[i]);
+      if (pts[i - 1].elevation >= 0 && pts[i].elevation < 0) set = cross(pts[i - 1], pts[i]);
+      if (!top || pts[i].elevation > top.elevation) top = pts[i];
+    }
+    return { pts, rise, set, top };
+  }
+
+  _renderSunPaths() {
+    const c = this._config;
+    const g = this.shadowRoot.querySelector('g.paths');
+    if (!g) return;
+    if (!c.show_sun_paths || !c.sun_paths.length) { g.innerHTML = ''; return; }
+    const R = this._R();
+    const rEl = (e) => (1 - Math.max(0, e) / 90) * R;
+    const now = new Date();
+    const dates = { today: now, summer: new Date(now.getFullYear(), 5, 21), winter: new Date(now.getFullYear(), 11, 21) };
+    const fmtT = (t) => new Date(t).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+    const P = (pt) => this._xy(pt.azimuth, rEl(pt.elevation)).map((v) => v.toFixed(1)).join(',');
+    let svg = '';
+    // Reihenfolge: Sommer, Winter unten, Heute oben
+    ['summer', 'winter', 'today'].filter((k) => c.sun_paths.includes(k)).forEach((k) => {
+      const def = SUN_PATHS[k];
+      const day = this._sunDay(dates[k]);
+      const up = day.pts.filter((p) => p.elevation >= 0);
+      if (!up.length && !day.rise) return;
+      const line = [day.rise, ...up, day.set].filter(Boolean);
+      const title = `Sonnenbahn ${k === 'today' ? 'heute' : `am ${def.label}`}`
+        + (day.rise ? `\nAufgang ${fmtT(day.rise.t)} (${dir16(day.rise.azimuth)} ${Math.round(day.rise.azimuth)}°)` : '')
+        + (day.set ? `\nUntergang ${fmtT(day.set.t)} (${dir16(day.set.azimuth)} ${Math.round(day.set.azimuth)}°)` : '')
+        + `\nMittagshöhe ${Math.round(day.top.elevation)}° um ${fmtT(day.top.t)}`
+        + '\nAbstand zur Mitte = Sonnenhöhe (Rand = Horizont)';
+      svg += `<g class="sunpath"><title>${title}</title>
+        <polyline points="${line.map(P).join(' ')}" fill="none" stroke="${def.color}" stroke-width="${k === 'today' ? 1.8 : 1.3}"
+          stroke-dasharray="${def.dash}" stroke-linecap="round" stroke-linejoin="round" opacity=".95"
+          filter="drop-shadow(0 0 1px rgba(0,0,0,.5))"/>`;
+      if (k === 'today') {
+        // Stundenpunkte, Beschriftung alle 3 Stunden
+        up.filter((p) => new Date(p.t).getMinutes() === 0).forEach((p) => {
+          const [x, y] = this._xy(p.azimuth, rEl(p.elevation));
+          const h = new Date(p.t).getHours();
+          svg += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="1.5" fill="${def.color}" stroke="#fff" stroke-width=".5"/>`;
+          if (h % 3 === 0) {
+            svg += `<text x="${x.toFixed(1)}" y="${(y - 4.5).toFixed(1)}" font-size="6.5" fill="${def.color}" stroke="rgba(0,0,0,.7)" stroke-width="1.8"
+                      paint-order="stroke" text-anchor="middle">${h}</text>`;
+          }
+        });
+        [['rise', '↑'], ['set', '↓']].forEach(([key, arrow]) => {
+          const p = day[key];
+          if (!p) return;
+          const [x, y] = this._xy(p.azimuth, R);
+          const [lx, ly] = this._xy(p.azimuth, R - 11);
+          svg += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="${def.color}" stroke="#fff" stroke-width="1"/>
+            <text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" font-size="7" font-weight="600" fill="${def.color}" stroke="rgba(0,0,0,.75)" stroke-width="2"
+              paint-order="stroke" text-anchor="middle" dominant-baseline="middle">${arrow}${fmtT(p.t)}</text>`;
+        });
+      } else {
+        const [x, y] = this._xy(day.top.azimuth, rEl(day.top.elevation));
+        svg += `<text x="${x.toFixed(1)}" y="${(y + (k === 'summer' ? -4 : 8)).toFixed(1)}" font-size="6.5" fill="${def.color}" stroke="rgba(0,0,0,.7)"
+                  stroke-width="1.8" paint-order="stroke" text-anchor="middle">${def.label}</text>`;
+      }
+      svg += '</g>';
+    });
+    g.innerHTML = svg;
+    this._pathsDay = now.toDateString();
+  }
+
   /* ---------- Auswertung ---------- */
-  _aggregate() {
+  _aggregate(series = this._series) {
     const c = this._config;
     const stops = this._src().color_stops;
+    const nb = c.elevation_bands;
     const n = c.sectors;
     const width = 360 / n;
     const mk = () => Array.from({ length: n }, () => new Array(stops.length).fill(0));
     const agg = { n, width, time: mk(), energy: mk(), sumV: new Array(n).fill(0), cnt: new Array(n).fill(0),
       timeBins: new Array(stops.length).fill(0), energyBins: new Array(stops.length).fill(0),
-      totalTime: 0, totalEnergySun: 0, totalEnergy: 0 };
-    this._series.forEach((p) => {
+      totalTime: 0, totalEnergySun: 0, totalEnergy: 0, nb, cells: new Map() };
+    series.forEach((p) => {
       const wh = (p.v * p.dt) / 3600;
       agg.totalEnergy += wh;
       if (p.elevation <= 0) return;
@@ -567,6 +708,13 @@ class HeliosCompassCard extends HTMLElement {
       agg.cnt[sec] += 1;
       agg.totalTime += 1;
       agg.totalEnergySun += wh;
+      const band = Math.min(nb - 1, Math.floor(p.elevation / (90 / nb)));
+      const key = sec * nb + band;
+      const cell = agg.cells.get(key) || { sec, band, sum: 0, cnt: 0, hours: 0 };
+      cell.sum += p.v;
+      cell.cnt += 1;
+      cell.hours += p.dt / 3600;
+      agg.cells.set(key, cell);
     });
     return agg;
   }
@@ -579,6 +727,56 @@ class HeliosCompassCard extends HTMLElement {
     const agg = this._aggregate();
     const metric = this._metric;
     const { n, width } = agg;
+
+    const arcPath = (a0, a1, r0, r1) => {
+      const f = (v) => v.toFixed(2);
+      const [x0, y0] = this._xy(a0, r1);
+      const [x1, y1] = this._xy(a1, r1);
+      const [x2, y2] = this._xy(a1, r0);
+      const [x3, y3] = this._xy(a0, r0);
+      if (r0 < 0.01) return `M0,0 L${f(x0)},${f(y0)} A${f(r1)},${f(r1)} 0 0 1 ${f(x1)},${f(y1)} Z`;
+      return `M${f(x3)},${f(y3)} L${f(x0)},${f(y0)} A${f(r1)},${f(r1)} 0 0 1 ${f(x1)},${f(y1)} L${f(x2)},${f(y2)} A${f(r0)},${f(r0)} 0 0 0 ${f(x3)},${f(y3)} Z`;
+    };
+    const labelSvg = (x, y, lbl) => (c.image
+      ? `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" font-size="7" fill="#fff" stroke="rgba(0,0,0,.6)" stroke-width="1.8"
+                    paint-order="stroke" text-anchor="middle" dominant-baseline="middle">${lbl}</text>`
+      : `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" font-size="7" fill="var(--secondary-text-color, #777)"
+                    stroke="var(--card-background-color, #fff)" stroke-width="2.2" paint-order="stroke"
+                    text-anchor="middle" dominant-baseline="middle">${lbl}</text>`);
+    const r = RANGES[this._range];
+    const note = this.shadowRoot.querySelector('.note');
+    if (note) note.textContent = '';
+
+    if (metric === 'shading') {
+      // Verschattungskarte: Richtung × Sonnenhöhe, Farbe = Ø Leistung
+      const nb = agg.nb;
+      const bandDeg = 90 / nb;
+      const rEl = (e) => (1 - e / 90) * R;
+      const line = 'rgba(46,160,120,.55)';
+      let svg = '';
+      [30, 60].forEach((e) => {
+        svg += `<circle r="${rEl(e).toFixed(1)}" fill="none" stroke="${line}" stroke-width=".6"/>`;
+        const [x, y] = this._xy(135, rEl(e));
+        svg += labelSvg(x, y, `${e}°`);
+      });
+      const gapS = Math.min(0.8, width * 0.08);
+      agg.cells.forEach((cell) => {
+        const center = cell.sec * width;
+        const avg = cell.sum / cell.cnt;
+        const e0 = cell.band * bandDeg;
+        const e1 = e0 + bandDeg;
+        svg += `<path class="wedge" d="${arcPath(center - width / 2 + gapS / 2, center + width / 2 - gapS / 2, rEl(e1) + 0.3, rEl(e0) - 0.3)}"
+                   fill="${stops[this._bin(avg)].color}" opacity="${c.sector_opacity}">
+                   <title>Richtung ${Math.round(center)}° (${dir16(center)}), Sonnenhöhe ${fmtNum(e0, 1)}–${fmtNum(e1, 1)}°
+Ø ${fmtPower(avg)} · ${fmtNum(cell.hours, cell.hours < 10 ? 1 : 0)} Std. Sonne</title></path>`;
+      });
+      this.shadowRoot.querySelector('g.trace').innerHTML = svg;
+      if (note) note.textContent = agg.totalTime ? 'Schatten: Abstand zur Mitte = Sonnenhöhe (Rand = Horizont), Farbe = Ø Leistung' : '';
+      this._legendShares(agg, 'time');
+      this._renderStats(agg);
+      this._renderError(agg);
+      return;
+    }
 
     // Werte je Sektor (gestapelt) bestimmen
     let stacks; // stacks[sec] = [{bin, value}]
@@ -600,7 +798,18 @@ class HeliosCompassCard extends HTMLElement {
       tip = (sec, part) => `${this._binLabel(part.bin)}: ${fmtPct(part.value)} % ${metric === 'energy' ? 'des Ertrags' : 'der Sonnenzeit'}`;
     }
     const sectorTotals = stacks.map((st) => st.reduce((a, b) => a + b.value, 0));
-    const maxVal = Math.max(0, ...sectorTotals);
+    // Vergleich Sommer/Winter: andere Jahreszeit als Umriss
+    let compareTotals = null;
+    if (this._compare && this._compare.length) {
+      const ca = this._aggregate(this._compare);
+      if (metric === 'avg_power') compareTotals = ca.cnt.map((k, i) => (k ? ca.sumV[i] / k : 0));
+      else {
+        const mat = metric === 'energy' ? ca.energy : ca.time;
+        const tot = metric === 'energy' ? ca.totalEnergySun : ca.totalTime;
+        compareTotals = mat.map((row) => (tot ? (row.reduce((a, b) => a + b, 0) / tot) * 100 : 0));
+      }
+    }
+    const maxVal = Math.max(0, ...sectorTotals, ...(compareTotals || []));
 
     // Ringskala
     const step = niceStep(maxVal);
@@ -615,23 +824,9 @@ class HeliosCompassCard extends HTMLElement {
       const [x, y] = this._xy(135, rr);
       const val = i * step;
       const lbl = unit === '%' ? `${fmtNum(val, 1)}%` : fmtPower(val).replace(' ', '');
-      ringSvg += c.image
-        ? `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" font-size="7" fill="#fff" stroke="rgba(0,0,0,.6)" stroke-width="1.8"
-                    paint-order="stroke" text-anchor="middle" dominant-baseline="middle">${lbl}</text>`
-        : `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" font-size="7" fill="var(--secondary-text-color, #777)"
-                    stroke="var(--card-background-color, #fff)" stroke-width="2.2" paint-order="stroke"
-                    text-anchor="middle" dominant-baseline="middle">${lbl}</text>`;
+      ringSvg += labelSvg(x, y, lbl);
     }
 
-    const arcPath = (a0, a1, r0, r1) => {
-      const f = (v) => v.toFixed(2);
-      const [x0, y0] = this._xy(a0, r1);
-      const [x1, y1] = this._xy(a1, r1);
-      const [x2, y2] = this._xy(a1, r0);
-      const [x3, y3] = this._xy(a0, r0);
-      if (r0 < 0.01) return `M0,0 L${f(x0)},${f(y0)} A${f(r1)},${f(r1)} 0 0 1 ${f(x1)},${f(y1)} Z`;
-      return `M${f(x3)},${f(y3)} L${f(x0)},${f(y0)} A${f(r1)},${f(r1)} 0 0 1 ${f(x1)},${f(y1)} L${f(x2)},${f(y2)} A${f(r0)},${f(r0)} 0 0 0 ${f(x3)},${f(y3)} Z`;
-    };
     const gap = Math.min(1.2, width * 0.12);
     let wedges = '';
     stacks.forEach((parts, sec) => {
@@ -649,9 +844,29 @@ class HeliosCompassCard extends HTMLElement {
                      stroke="rgba(255,255,255,.35)" stroke-width=".3"><title>${head}\n${tip(sec, part)}</title></path>`;
       });
     });
-    this.shadowRoot.querySelector('g.trace').innerHTML = ringSvg + wedges;
+    let outline = '';
+    if (compareTotals) {
+      const other = RANGES[r.compare];
+      compareTotals.forEach((v, sec) => {
+        if (!(v > 0)) return;
+        const center = sec * width;
+        const rr = rOf(v);
+        const [x0, y0] = this._xy(center - width / 2, rr);
+        const [x1, y1] = this._xy(center + width / 2, rr);
+        outline += `<path d="M${x0.toFixed(2)},${y0.toFixed(2)} A${rr.toFixed(2)},${rr.toFixed(2)} 0 0 1 ${x1.toFixed(2)},${y1.toFixed(2)}"
+                      fill="none" stroke="var(--primary-text-color, #222)" stroke-width="1.6" stroke-dasharray="3 2" opacity=".85">
+                      <title>${other.label} (${other.desc}), Richtung ${Math.round(center)}° (${dir16(center)}): ${unit === '%' ? `${fmtPct(v)} %` : fmtPower(v)}</title></path>`;
+      });
+      if (note) note.textContent = `Farbig: ${r.label} (${r.desc}) · gestrichelt: ${other.label} (${other.desc}) zum Vergleich`;
+    }
+    this.shadowRoot.querySelector('g.trace').innerHTML = ringSvg + wedges + outline;
 
-    // Legende
+    this._legendShares(agg, metric);
+    this._renderStats(agg);
+    this._renderError(agg);
+  }
+
+  _legendShares(agg, metric) {
     const legBins = metric === 'energy' ? agg.energyBins : agg.timeBins;
     const legTot = metric === 'energy' ? agg.totalEnergySun : agg.totalTime;
     this.shadowRoot.querySelectorAll('.bar span').forEach((el) => {
@@ -661,10 +876,10 @@ class HeliosCompassCard extends HTMLElement {
       el.title = `${this._binLabel(b)}: ${fmtPct(v)} % ${metric === 'energy' ? 'des Ertrags' : 'der Sonnenzeit'}`;
     });
     const head = this.shadowRoot.querySelector('.legend .head .l');
-    if (head) head.title = METRICS[metric].legend;
+    if (head) head.title = METRICS[metric]?.legend || '';
+  }
 
-    this._renderStats(agg);
-
+  _renderError(agg) {
     const err = this.shadowRoot.querySelector('.err');
     if (err) {
       err.textContent = this._error ? `Verlauf: ${this._error}`
@@ -687,7 +902,22 @@ class HeliosCompassCard extends HTMLElement {
     };
     const r = RANGES[this._range];
     const hasData = this._series.length > 0;
-    set('energy', hasData ? fmtEnergy(agg.totalEnergy) : '–', hasData ? `letzte ${r.label}` : '');
+    const src = this._src();
+    const period = r.months ? `${r.desc}, letzte 12 Mon.` : `letzte ${r.label}`;
+    const spec = src.kwp > 0 && hasData ? `${fmtSpec(agg.totalEnergy / 1000 / src.kwp)} kWh/kWp` : '';
+    set('energy', hasData ? fmtEnergy(agg.totalEnergy) : '–', hasData ? (spec || period) : '');
+    root.querySelector('.stat[data-s="energy"]').title = hasData ? `${fmtEnergy(agg.totalEnergy)} ${period}${spec ? ` · ${spec}` : ''}` : '';
+    // Vergleich der Anlagen: spezifischer Ertrag
+    const yieldEl = root.querySelector('.yield');
+    if (yieldEl) {
+      const withKwp = this._config.sources.filter((x) => x.kwp > 0);
+      if (withKwp.length > 1 && hasData) {
+        yieldEl.innerHTML = `Spezifischer Ertrag (${esc(r.months ? r.desc : r.label)}): ${withKwp.map((x) => {
+          const e = this._energyOf(this._rawSeries(x, r.months).series);
+          return `${esc(x.name || x.entities[0])} <b>${fmtSpec(e / 1000 / x.kwp)}</b>`;
+        }).join(' · ')} kWh/kWp`;
+      } else yieldEl.innerHTML = '';
+    }
     if (this._peak && this._peak.v > 0) {
       const d = new Date(this._peak.t);
       const when = r.hours > 24
@@ -751,8 +981,15 @@ class HeliosCompassCard extends HTMLElement {
     const [tx, ty] = this._xy(a, R + 3);
     const [l1x, l1y] = this._xy(a - 4, R + 13);
     const [l2x, l2y] = this._xy(a + 4, R + 13);
-    this.shadowRoot.querySelector('g.sun').innerHTML = `<polygon points="${tx.toFixed(1)},${ty.toFixed(1)} ${l1x.toFixed(1)},${l1y.toFixed(1)} ${l2x.toFixed(1)},${l2y.toFixed(1)}" fill="${col}">
+    let sunSvg = `<polygon points="${tx.toFixed(1)},${ty.toFixed(1)} ${l1x.toFixed(1)},${l1y.toFixed(1)} ${l2x.toFixed(1)},${l2y.toFixed(1)}" fill="${col}">
       <title>Sonne: Azimut ${a.toFixed(0)}°, Höhe ${sun.elevation.toFixed(0)}°</title></polygon>`;
+    if (c.show_sun_paths && sun.elevation > 0) {
+      const [sx, sy] = this._xy(a, (1 - sun.elevation / 90) * R);
+      sunSvg += `<circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="5" fill="#ffc107" stroke="#fff" stroke-width="1.5"
+        filter="drop-shadow(0 0 3px rgba(255,170,0,.9))"><title>Sonne jetzt: Azimut ${a.toFixed(0)}°, Höhe ${sun.elevation.toFixed(0)}°</title></circle>`;
+    }
+    this.shadowRoot.querySelector('g.sun').innerHTML = sunSvg;
+    if (this._pathsDay && this._pathsDay !== new Date().toDateString()) this._renderSunPaths();
 
     const nowBin = this._bin(power);
     this.shadowRoot.querySelectorAll('.bar span').forEach((el) => el.classList.toggle('now', Number(el.dataset.i) === nowBin));
@@ -807,6 +1044,11 @@ const LABELS = {
   latitude: 'Breitengrad (leer = HA-Standort)',
   longitude: 'Längengrad (leer = HA-Standort)',
   unit_factor: 'Umrechnungsfaktor auf W (leer = automatisch)',
+  kwp: 'Anlagenleistung (kWp, für kWh/kWp)',
+  show_sun_paths: 'Sonnenbahnen einzeichnen',
+  sun_paths: 'Welche Sonnenbahnen',
+  elevation_bands: 'Schatten-Ansicht: Anzahl Höhenringe',
+  season_overlay: 'Sommer/Winter: andere Jahreszeit gestrichelt zum Vergleich',
   ...CORNER_POS,
 };
 
@@ -815,6 +1057,9 @@ const HELPERS = {
   image_offset_x: 'In % des Kompassradius, damit das Haus genau in der Mitte sitzt.',
   image_offset_y: 'In % des Kompassradius, damit das Haus genau in der Mitte sitzt.',
   sectors: '36 = 10° breite Sektoren, 16 = eine pro Kompassrichtung',
+  elevation_bands: '9 = Ringe à 10° Sonnenhöhe. Für die Schatten-Ansicht am besten „1 Jahr“ wählen.',
+  kwp: 'Leer = Summe der kWp aus den Modulfeldern.',
+  show_sun_paths: 'Heute (mit Uhrzeiten, Auf- und Untergang) sowie 21.6. und 21.12. Abstand zur Mitte = Sonnenhöhe.',
   unit_factor: 'Nur nötig, wenn der Sensor weder W noch kW meldet (z. B. 1000 für kW).',
 };
 
@@ -826,15 +1071,22 @@ const SECTIONS = [
       { name: 'max_power', selector: num(50, 200000, 50, 'W') },
       { name: 'legend_label', selector: { text: {} } },
     ] },
+    { name: 'kwp', selector: num(0.01, 10000, 0.01, 'kWp') },
   ] },
   { key: 'display', title: 'Darstellung', icon: '🧭', schema: [
     { type: 'grid', name: '', schema: [
       { name: 'metric', selector: { select: { mode: 'dropdown', options: [
-        { value: 'time', label: 'Zeitanteil' }, { value: 'energy', label: 'Ertrag' }, { value: 'avg_power', label: 'Ø Leistung' }] } } },
+        { value: 'time', label: 'Zeitanteil' }, { value: 'energy', label: 'Ertrag' }, { value: 'avg_power', label: 'Ø Leistung' },
+        { value: 'shading', label: 'Schatten (Richtung × Sonnenhöhe)' }] } } },
       { name: 'default_range', selector: { select: { mode: 'dropdown', options: RANGE_OPTIONS } } },
     ] },
     { name: 'ranges', selector: { select: { multiple: true, mode: 'list', options: RANGE_OPTIONS } } },
+    { name: 'season_overlay', selector: { boolean: {} } },
+    { name: 'show_sun_paths', selector: { boolean: {} } },
+    { name: 'sun_paths', selector: { select: { multiple: true, mode: 'list', options: [
+      { value: 'today', label: 'Heute' }, { value: 'summer', label: 'Längster Tag (21.6.)' }, { value: 'winter', label: 'Kürzester Tag (21.12.)' }] } } },
     { name: 'sectors', selector: num(8, 72, 4, null, 'slider') },
+    { name: 'elevation_bands', selector: num(3, 18, 1, null, 'slider') },
     { name: 'sector_opacity', selector: num(0.2, 1, 0.05, null, 'slider') },
     { name: 'show_metric_switch', selector: { boolean: {} } },
     { name: 'show_stats', selector: { boolean: {} } },
@@ -889,6 +1141,7 @@ const SOURCE_SCHEMA = [
     { name: 'max_power', selector: num(50, 200000, 50, 'W') },
     { name: 'legend_label', selector: { text: {} } },
   ] },
+  { name: 'kwp', selector: num(0.01, 10000, 0.01, 'kWp') },
 ];
 const MODULE_SCHEMA = [
   { type: 'grid', name: '', schema: [
