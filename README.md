@@ -3,7 +3,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
 [![Validate](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml/badge.svg)](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml)
 ![Lizenz](https://img.shields.io/github/license/muhkuh666/helios-compass-card)
-![Version](https://img.shields.io/badge/version-1.7.0-orange.svg)
+![Version](https://img.shields.io/badge/version-1.7.1-orange.svg)
 
 **PV-Sonnenkompass für Home Assistant.** Die Karte zeigt, aus welcher Himmelsrichtung deine Solaranlage wie viel liefert. Jeder Sektor der Rose steht für eine Sonnenrichtung. Die Farben zeigen die Leistungsklassen, die Länge den Anteil an Zeit oder Ertrag. Darunter liegt auf Wunsch ein Luftbild deines Hauses.
 
@@ -423,6 +423,14 @@ mode: single
 
 ## Hinweise & Fehlerbehebung
 
+- **Hausbild wird nicht angezeigt** (z. B. in der Companion-App):
+  - Verwende einen **relativen Pfad** wie `/local/helios/haus.png`, keine Adresse wie `http://192.168.…` oder `http://homeassistant.local…`. Die App erreicht lokale Adressen unterwegs nicht.
+  - Die Datei muss in `/config/www/` liegen. Hast du den Ordner `www` neu angelegt, starte Home Assistant einmal neu.
+  - Achte auf Groß- und Kleinschreibung: `Haus.PNG` ist nicht dasselbe wie `haus.png`.
+  - Sehr große Fotos (über 2–3 MB) verkleinern, damit sie auf dem Handy schnell laden.
+  - In der App einmal **Einstellungen → Companion App → Fehlerbehebung → Frontend-Cache zurücksetzen**.
+  - Kann die Karte das Bild nicht laden, zeigt sie unten einen Hinweis mit dem Pfad.
+
 - **„Custom element doesn't exist: helios-compass-card“:** Die JS-Datei wurde nicht geladen.
   - Prüfe, ob `/hacsfiles/helios-compass-card/helios-compass-card.js` im Browser Code anzeigt.
   - Prüfe, ob die Ressource unter Einstellungen → Dashboards → Ressourcen eingetragen ist.
@@ -439,6 +447,7 @@ mode: single
 
 | Version | Änderungen |
 |---|---|
+| **1.7.1** | Hausbild als HTML-Ebene statt SVG, dadurch zuverlässig auch in der Companion-App (iOS/Android); Hinweis, wenn das Bild nicht geladen werden kann |
 | **1.7.0** | Energiezähler je Anlage (`energy_entity`): gemessener Ertrag und kWh/kWp; neuer Eckwert „Ertrag heute“ (`type: energy_today`) |
 | **1.6.1** | ☀-Knopf zum Ein-/Ausblenden der Sonnenbahnen; Ansichten im Umschalter wählbar (z. B. ohne „Schatten“); Editor blendet Einzel-Sensor aus, wenn Anlagen angelegt sind; kürzere Feldbezeichnungen |
 | **1.6.0** | Sonnenbahnen (heute mit Auf-/Untergang, 21.6., 21.12.); Ansicht „Schatten“ (Richtung × Sonnenhöhe); Zeiträume 30 Tage, 1 Jahr, Sommer, Winter mit Vergleich; kWp je Anlage und spezifischer Ertrag kWh/kWp |

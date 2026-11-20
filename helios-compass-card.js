@@ -4,7 +4,7 @@
  *
  * Installation: siehe README.md
  */
-const CARD_VERSION = '1.7.0';
+const CARD_VERSION = '1.7.1';
 
 const DIRS = ['N', 'NNO', 'NO', 'ONO', 'O', 'OSO', 'SO', 'SSO', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
 const dir16 = (az) => DIRS[Math.round((((az % 360) + 360) % 360) / 22.5) % 16];
@@ -531,6 +531,11 @@ class HeliosCompassCard extends HTMLElement {
         .sources button + button { border-left:1px solid var(--divider-color, #ccc); }
         .plot { position:relative; width:100%; max-width:420px; margin:0 auto; aspect-ratio: 1 / 1.02; }
         svg.rose { position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
+        /* Hausbild als HTML-Ebene unter dem Kompass (funktioniert auch in der Companion-App) */
+        .bgwrap { position:absolute; left:50%; top:50%; width:${(2 * 108 / 320) * 100}%; aspect-ratio:1/1;
+                  transform:translate(-50%,-50%); pointer-events:none; }
+        .bgwrap.clip { border-radius:50%; overflow:hidden; -webkit-mask-image:-webkit-radial-gradient(white, black); }
+        .bgwrap img { position:absolute; object-fit:contain; transform-origin:50% 50%; max-width:none; }
         .corner { position:absolute; line-height:1.15; cursor:pointer; z-index:2; }
         .corner .lbl { font-size: .85em; color: var(--primary-text-color); }
         .corner .val { font-size: 1.75em; color: var(--primary-text-color); font-weight: 400; }
@@ -577,6 +582,7 @@ class HeliosCompassCard extends HTMLElement {
         </div>` : ''}
         ${c.sources.length > 1 ? `<div class="sources">${c.sources.map((x) => `<button data-src="${esc(x.id)}">${esc(x.name || this._hass?.states[x.entities[0]]?.attributes.friendly_name || x.entities[0])}</button>`).join('')}</div>` : ''}
         <div class="plot">
+          ${c.image ? '<div class="bgwrap"><img class="bg" alt="" decoding="async"></div>' : ''}
           <svg class="rose" viewBox="-160 -160 320 320" preserveAspectRatio="xMidYMid meet">
             <g class="static"></g><g class="trace"></g><g class="paths"></g><g class="modules"></g><g class="sun"></g>
           </svg>
@@ -674,16 +680,7 @@ class HeliosCompassCard extends HTMLElement {
     const c = this._config;
     const R = this._R();
     let s = '';
-    if (c.image) {
-      const size = 2 * R * Number(c.image_scale || 0.8);
-      const dx = ((Number(c.image_offset_x) || 0) / 100) * R;
-      const dy = (-(Number(c.image_offset_y) || 0) / 100) * R;
-      const rot = Number(c.image_rotation) || 0;
-      if (c.image_clip) s += `<defs><clipPath id="hc-clip"><circle r="${R}"/></clipPath></defs>`;
-      s += `<g ${c.image_clip ? 'clip-path="url(#hc-clip)"' : ''}><image href="${esc(c.image)}" x="${-size / 2}" y="${-size / 2}" width="${size}" height="${size}"
-              preserveAspectRatio="xMidYMid meet" opacity="${Number(c.image_opacity ?? 1)}"
-              transform="translate(${dx.toFixed(2)} ${dy.toFixed(2)}) rotate(${rot})"/></g>`;
-    }
+    this._renderImage();
     const line = 'rgba(46,160,120,.55)';
     for (let i = 0; i < 16; i++) {
       const [x, y] = this._xy(i * 22.5, R);
@@ -700,6 +697,34 @@ class HeliosCompassCard extends HTMLElement {
               dominant-baseline="central" font-family="inherit">${d}</text>`;
     });
     this.shadowRoot.querySelector('g.static').innerHTML = s;
+  }
+
+  _renderImage() {
+    const c = this._config;
+    const wrap = this.shadowRoot.querySelector('.bgwrap');
+    const img = wrap?.querySelector('img');
+    if (!img) return;
+    const scale = Number(c.image_scale || 0.8) * 100; // % des Kompassdurchmessers
+    const ox = (Number(c.image_offset_x) || 0) / 2; // % von R → % des Durchmessers
+    const oy = (Number(c.image_offset_y) || 0) / 2;
+    wrap.classList.toggle('clip', !!c.image_clip);
+    Object.assign(img.style, {
+      width: `${scale}%`,
+      height: `${scale}%`,
+      left: `calc(${50 + ox}% - ${scale / 2}%)`,
+      top: `calc(${50 - oy}% - ${scale / 2}%)`,
+      transform: `rotate(${Number(c.image_rotation) || 0}deg)`,
+      opacity: String(Number(c.image_opacity ?? 1)),
+    });
+    let url = String(c.image);
+    if (this._hass && /^\/(local|media|api)\//.test(url) && this._hass.hassUrl) url = this._hass.hassUrl(url);
+    img.onerror = () => {
+      this._imageError = `Hausbild konnte nicht geladen werden: ${c.image}`
+        + (/^https?:\/\/(192\.168|10\.|172\.|[^/]*\.local)/.test(c.image) ? ' – bitte einen Pfad wie /local/haus.png verwenden (die App erreicht lokale Adressen unterwegs nicht).' : '');
+      this._renderError();
+    };
+    img.onload = () => { if (this._imageError) { this._imageError = null; this._renderError(); } };
+    if (img.getAttribute('src') !== url) img.setAttribute('src', url);
   }
 
   _renderModules() {
@@ -1003,9 +1028,11 @@ class HeliosCompassCard extends HTMLElement {
     if (head) head.title = METRICS[metric]?.legend || '';
   }
 
-  _renderError(agg) {
+  _renderError(agg = this._lastAgg) {
+    this._lastAgg = agg;
     const err = this.shadowRoot.querySelector('.err');
-    if (err) {
+    if (err && this._imageError) { err.textContent = this._imageError; return; }
+    if (err && agg) {
       err.textContent = this._error ? `Verlauf: ${this._error}`
         : (this._series.length && !agg.totalTime ? 'Im gewählten Zeitraum stand die Sonne nicht über dem Horizont.' : '');
     }
