@@ -1,10 +1,10 @@
 /**
  * Helios Compass – PV-Sonnenkompass-Karte für Home Assistant
- * Solarrose: Sonnenrichtung × Leistungsklassen über dem Luftbild des Hauses.
+ * Helios Compass Card: Sonnenrichtung × Leistungsklassen über dem Luftbild des Hauses.
  *
  * Installation: siehe README.md
  */
-const CARD_VERSION = '1.2.1';
+const CARD_VERSION = '1.5.1';
 
 const DIRS = ['N', 'NNO', 'NO', 'ONO', 'O', 'OSO', 'SO', 'SSO', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
 const dir16 = (az) => DIRS[Math.round((((az % 360) + 360) % 360) / 22.5) % 16];
@@ -12,6 +12,7 @@ const dir16 = (az) => DIRS[Math.round((((az % 360) + 360) % 360) / 22.5) % 16];
 const RANGES = {
   '1h': { label: '1 Std.', hours: 1, step: 60 },
   '8h': { label: '8 Std.', hours: 8, step: 300 },
+  '12h': { label: '12 Std.', hours: 12, step: 300 },
   '24h': { label: '24 Std.', hours: 24, step: 300 },
   '7d': { label: '7 Tage', hours: 168, step: 3600, stats: true },
   '14d': { label: '14 Tage', hours: 336, step: 3600, stats: true },
@@ -26,7 +27,7 @@ const METRICS = {
 const DEFAULT_COLORS = ['#1e40af', '#2563eb', '#38bdf8', '#2dd4bf', '#22c55e', '#a3e635', '#facc15', '#f97316', '#dc2626'];
 
 const DEFAULTS = {
-  title: 'Helios Compass',
+  title: 'Helios Compass Card',
   sun_entity: 'sun.sun',
   max_power: 8000,
   metric: 'time', // 'time' | 'energy' | 'avg_power'
@@ -34,21 +35,26 @@ const DEFAULTS = {
   show_stats: true,
   sectors: 36,
   sector_opacity: 0.8,
-  ranges: ['1h', '8h', '24h', '7d', '14d'],
+  ranges: ['1h', '8h', '12h', '24h', '7d', '14d'],
   default_range: '8h',
   image: null,
   image_scale: 0.8,
   image_rotation: 0,
+  image_offset_x: 0, // % des Kompassradius, + = nach rechts (Osten)
+  image_offset_y: 0, // % des Kompassradius, + = nach oben (Norden)
+  image_clip: false, // Bild rund auf den Kompass zuschneiden
   image_opacity: 1,
   stats_type: 'mean', // 'mean' | 'max'
   refresh_interval: 300, // Sekunden
   show_legend: true,
   legend_label: 'PV-Leistung',
   modules: [],
+  show_total: null, // null = automatisch bei mehreren Anlagen
+  total_name: 'Gesamt',
 };
 
-const defaultCorners = (powerEntity) => ({
-  top_left: { entity: powerEntity, name: 'PV-Leistung' },
+const defaultCorners = () => ({
+  top_left: { type: 'source' },
   top_right: { type: 'azimuth', name: 'Sonnenazimut' },
   bottom_left: { type: 'elevation', name: 'Sonnenhöhe' },
   bottom_right: null,
@@ -72,6 +78,14 @@ function sunPosition(date, lat, lon) {
 }
 
 /* ---------- Hilfsfunktionen ---------- */
+function makeStops(stops, max) {
+  if (!Array.isArray(stops) || !stops.length) {
+    stops = DEFAULT_COLORS.map((color, i) => ({ value: (max / (DEFAULT_COLORS.length - 1)) * i, color }));
+  }
+  return stops.map((x) => ({ value: Number(x.value) || 0, color: x.color || '#888' })).sort((a, b) => a.value - b.value);
+}
+const validModule = (m) => m && isFinite(Number(m.azimuth));
+
 function resample(raw, start, end, stepSec) {
   const pts = raw.filter((p) => !isNaN(p.t)).sort((a, b) => a.t - b.t);
   const out = [];
@@ -96,7 +110,7 @@ function niceStep(max) {
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const fmtNum = (v, dec = 0) => Number(v).toLocaleString('de-DE', { maximumFractionDigits: dec, minimumFractionDigits: 0 });
 const fmtPct = (v) => fmtNum(v, v >= 10 ? 0 : 1);
-const fmtPower = (w) => (Math.abs(w) >= 10000 ? `${fmtNum(w / 1000, 1)} kW` : `${fmtNum(w)} W`);
+const fmtPower = (w) => (Math.abs(w) >= 1000 ? `${fmtNum(w / 1000, Math.abs(w) >= 10000 ? 1 : 2)} kW` : `${fmtNum(w)} W`);
 const fmtEnergy = (wh) => (wh >= 1000 ? `${fmtNum(wh / 1000, wh >= 100000 ? 0 : wh >= 10000 ? 1 : 2)} kWh` : `${fmtNum(wh)} Wh`);
 
 class HeliosCompassCard extends HTMLElement {
@@ -104,6 +118,7 @@ class HeliosCompassCard extends HTMLElement {
     super();
     this.attachShadow({ mode: 'open' });
     this._series = [];
+    this._data = {};
     this._peak = null;
     this._token = 0;
   }
@@ -117,27 +132,74 @@ class HeliosCompassCard extends HTMLElement {
   }
 
   setConfig(config) {
-    if (!config || !config.power_entity) throw new Error('Bitte "power_entity" angeben (z. B. sensor.pv_leistung).');
+    const hasSources = Array.isArray(config?.sources) && config.sources.some((x) => x && x.entity);
+    if (!config || (!config.power_entity && !hasSources)) {
+      throw new Error('Bitte "power_entity" oder "sources" angeben (z. B. sensor.pv_leistung).');
+    }
     const c = { ...DEFAULTS, ...config };
     c.ranges = (Array.isArray(c.ranges) ? c.ranges : DEFAULTS.ranges).filter((r) => RANGES[r]);
     if (!c.ranges.length) c.ranges = DEFAULTS.ranges;
     if (!METRICS[c.metric]) c.metric = 'time';
     c.max_power = Number(c.max_power) || 8000;
     c.sectors = Math.max(4, Math.min(180, Math.round(Number(c.sectors) || 36)));
-    if (!Array.isArray(c.color_stops) || !c.color_stops.length) {
-      c.color_stops = DEFAULT_COLORS.map((color, i) => ({ value: (c.max_power / (DEFAULT_COLORS.length - 1)) * i, color }));
+    const globalModules = Array.isArray(c.modules) ? c.modules.filter(validModule) : [];
+    const raw = hasSources ? config.sources.filter((x) => x && x.entity) : [{ entity: config.power_entity }];
+    c.sources = raw.map((x) => {
+      const max = Number(x.max_power) || c.max_power;
+      return {
+        id: x.entity,
+        entities: [x.entity],
+        name: x.name || '',
+        max_power: max,
+        color_stops: makeStops(Array.isArray(x.color_stops) ? x.color_stops : (x.max_power ? null : config.color_stops), max),
+        modules: [...globalModules, ...(Array.isArray(x.modules) ? x.modules.filter(validModule) : [])],
+        legend_label: x.legend_label,
+      };
+    });
+    c.show_total = (config.show_total ?? true) !== false && c.sources.length > 1;
+    if (c.show_total) {
+      const sum = c.sources.reduce((acc, x) => acc + x.max_power, 0);
+      const seg = sum / (DEFAULT_COLORS.length - 1);
+      const mag = 10 ** Math.floor(Math.log10(seg));
+      const nice = [1, 1.25, 1.5, 2, 2.5, 3, 4, 5, 6, 7.5, 8, 10].find((k) => k * mag >= seg - 1e-9) * mag;
+      const max = Number(c.total_max_power) || nice * (DEFAULT_COLORS.length - 1);
+      c.sources.push({
+        id: '__total',
+        total: true,
+        entities: c.sources.flatMap((x) => x.entities),
+        name: c.total_name || 'Gesamt',
+        max_power: max,
+        color_stops: makeStops(c.total_color_stops, max),
+        modules: [...new Set(c.sources.flatMap((x) => x.modules))],
+      });
     }
-    c.color_stops = [...c.color_stops].map((s) => ({ value: Number(s.value) || 0, color: s.color || '#888' })).sort((a, b) => a.value - b.value);
-    c.modules = Array.isArray(c.modules) ? c.modules.filter((m) => m && isFinite(Number(m.azimuth))) : [];
-    c.corners = { ...defaultCorners(c.power_entity), ...(config.corners || {}) };
+    c.power_entity = c.sources[0].entities[0];
+    c.corners = { ...defaultCorners(), ...(config.corners || {}) };
+    // Alte Konfigurationen: Ecke oben links war fest auf den ersten Sensor gestellt
+    // (z. B. {entity: sensor.bkw, name: 'BKW-Leistung'}). Bei mehreren Anlagen soll sie der Auswahl folgen.
+    const tl = c.corners.top_left;
+    if (c.sources.length > 1 && tl && tl.entity && tl.follow !== false) {
+      const src = c.sources.find((x) => !x.total && x.entities[0] === tl.entity);
+      const autoNames = [undefined, '', 'PV-Leistung', ...c.sources.map((x) => (x.name ? `${x.name}-Leistung` : null))];
+      if (src && autoNames.includes(tl.name)) c.corners.top_left = { type: 'source' };
+    }
     this._config = c;
     this._range = c.ranges.includes(this._load('range')) ? this._load('range') : (c.ranges.includes(c.default_range) ? c.default_range : c.ranges[0]);
     this._metric = c.show_metric_switch && METRICS[this._load('metric')] ? this._load('metric') : c.metric;
+    const wanted = this._load('source') || (c.default_source === 'total' ? '__total' : c.default_source);
+    this._sourceId = c.sources.some((x) => x.id === wanted) ? wanted : c.sources[0].id;
     this._built = false;
     this._lastFetch = 0;
     this._series = [];
+    this._data = {};
     this._peak = null;
     if (this._hass) { this._build(); this._update(true); this._fetch(); }
+  }
+
+  _src() { return this._config.sources.find((x) => x.id === this._sourceId) || this._config.sources[0]; }
+
+  _livePower(src = this._src()) {
+    return src.entities.reduce((acc, e) => acc + (parseFloat(this._hass.states[e]?.state) || 0) * this._factor(e), 0);
   }
 
   set hass(hass) {
@@ -193,9 +255,8 @@ class HeliosCompassCard extends HTMLElement {
     const r = RANGES[this._range];
     const end = Date.now();
     const start = end - r.hours * 3600e3;
-    const id = this._config.power_entity;
-    let pts = [];
-    let peak = null;
+    const ids = [...new Set(this._config.sources.flatMap((x) => x.entities))];
+    const data = {};
     let error = null;
     try {
       if (r.stats) {
@@ -203,52 +264,86 @@ class HeliosCompassCard extends HTMLElement {
           type: 'recorder/statistics_during_period',
           start_time: new Date(start).toISOString(),
           end_time: new Date(end).toISOString(),
-          statistic_ids: [id],
+          statistic_ids: ids,
           period: 'hour',
           types: ['mean', 'max'],
         });
-        pts = (res?.[id] || []).map((s) => {
-          const t = (typeof s.start === 'number' ? s.start : Date.parse(s.start)) + 1800e3;
-          const mean = Number(s.mean);
-          const max = Number(s.max ?? s.mean);
-          if (isFinite(max) && (!peak || max > peak.v)) peak = { v: max, t };
-          return { t, v: this._config.stats_type === 'max' ? max : mean, dt: 3600 };
+        ids.forEach((id) => {
+          let peak = null;
+          const series = (res?.[id] || []).map((st) => {
+            const t = (typeof st.start === 'number' ? st.start : Date.parse(st.start)) + 1800e3;
+            const mean = Number(st.mean);
+            const max = Number(st.max ?? st.mean);
+            if (isFinite(max) && (!peak || max > peak.v)) peak = { v: max, t };
+            return { t, v: this._config.stats_type === 'max' ? max : mean, vmax: isFinite(max) ? max : mean, dt: 3600 };
+          });
+          if (series.length) data[id] = { series, peak };
         });
       }
-      if (!pts.length) {
-        peak = null;
+      const missing = ids.filter((id) => !data[id]);
+      if (missing.length) {
         const res = await this._hass.callWS({
           type: 'history/history_during_period',
           start_time: new Date(start).toISOString(),
           end_time: new Date(end).toISOString(),
-          entity_ids: [id],
+          entity_ids: missing,
           minimal_response: true,
           no_attributes: true,
           significant_changes_only: false,
         });
-        const raw = (res?.[id] || []).map((s) => ({
-          t: s.lu !== undefined ? s.lu * 1000 : Date.parse(s.last_updated || s.last_changed),
-          v: parseFloat(s.s ?? s.state),
-        }));
-        raw.forEach((p) => { if (isFinite(p.v) && p.t >= start && (!peak || p.v > peak.v)) peak = { ...p }; });
-        pts = resample(raw, start, end, r.step).map((p) => ({ ...p, dt: r.step }));
+        missing.forEach((id) => {
+          let peak = null;
+          const raw = (res?.[id] || []).map((st) => ({
+            t: st.lu !== undefined ? st.lu * 1000 : Date.parse(st.last_updated || st.last_changed),
+            v: parseFloat(st.s ?? st.state),
+          }));
+          raw.forEach((p) => { if (isFinite(p.v) && p.t >= start && (!peak || p.v > peak.v)) peak = { ...p }; });
+          data[id] = { series: resample(raw, start, end, r.step).map((p) => ({ ...p, vmax: p.v, dt: r.step })), peak };
+        });
       }
     } catch (e) {
       console.warn('helios-compass-card: Verlauf konnte nicht geladen werden', e);
       error = e?.message || String(e);
     }
     if (token !== this._token) return; // veraltete Antwort
-    const f = this._factor(id);
-    const { lat, lon } = this._location();
+    Object.entries(data).forEach(([id, d]) => {
+      const f = this._factor(id);
+      d.series = d.series.filter((p) => isFinite(p.v)).map((p) => ({ ...p, v: Math.max(0, p.v * f), vmax: Math.max(0, (p.vmax ?? p.v) * f) }));
+      if (d.peak) d.peak = { ...d.peak, v: d.peak.v * f };
+    });
+    this._data = data;
     this._error = error;
-    this._series = pts.filter((p) => isFinite(p.v)).map((p) => ({ ...p, v: Math.max(0, p.v * f), ...sunPosition(new Date(p.t), lat, lon) }));
-    this._peak = peak ? { v: peak.v * f, t: peak.t, ...sunPosition(new Date(peak.t), lat, lon) } : null;
+    this._composeSeries();
     this._renderPlot();
+  }
+
+  /** Zeitreihe der aktiven Anlage (bzw. Summe aller Anlagen) zusammensetzen */
+  _composeSeries() {
+    const src = this._src();
+    const { lat, lon } = this._location();
+    const lists = src.entities.map((e) => this._data[e]).filter(Boolean);
+    let series = [];
+    let peak = null;
+    if (lists.length === 1) {
+      ({ series, peak } = lists[0]);
+    } else if (lists.length > 1) {
+      const m = new Map();
+      lists.forEach((l) => l.series.forEach((p) => {
+        const o = m.get(p.t) || { t: p.t, v: 0, vmax: 0, dt: p.dt };
+        o.v += p.v;
+        o.vmax += p.vmax ?? p.v;
+        m.set(p.t, o);
+      }));
+      series = [...m.values()].sort((x, y) => x.t - y.t);
+      series.forEach((p) => { if (!peak || p.vmax > peak.v) peak = { v: p.vmax, t: p.t }; });
+    }
+    this._series = series.map((p) => ({ ...p, ...sunPosition(new Date(p.t), lat, lon) }));
+    this._peak = peak ? { ...peak, ...sunPosition(new Date(peak.t), lat, lon) } : null;
   }
 
   _bin(v) {
     let idx = 0;
-    this._config.color_stops.forEach((s, i) => { if (v >= s.value) idx = i; });
+    this._src().color_stops.forEach((st, i) => { if (v >= st.value) idx = i; });
     return idx;
   }
 
@@ -256,19 +351,21 @@ class HeliosCompassCard extends HTMLElement {
   _build() {
     const c = this._config;
     const corner = (pos) => (c.corners[pos] ? `<div class="corner ${pos}" data-pos="${pos}"><div class="lbl"></div><div class="val"></div></div>` : '');
-    const unit = c.max_power >= 20000 ? 'kW' : 'W';
-    const tick = (v) => (unit === 'kW' ? fmtNum(v / 1000, 1) : Math.round(v));
     this.shadowRoot.innerHTML = `
       <style>
         :host { display:block; }
         ha-card { padding: 12px 14px 12px; overflow:hidden; height:100%; box-sizing:border-box; }
-        .top { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:2px; }
-        .title { font-size: 1.25em; color: var(--primary-text-color); }
+        .top { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:4px 8px; margin-bottom:2px; }
+        .title { font-size: 1.25em; color: var(--primary-text-color); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
         .metrics { display:flex; border:1px solid var(--divider-color, #ccc); border-radius:14px; overflow:hidden; flex-shrink:0; }
         .metrics button { font: inherit; font-size:.72em; padding:3px 8px; border:0; background:transparent; cursor:pointer;
                  color: var(--secondary-text-color); }
         .metrics button + button { border-left:1px solid var(--divider-color, #ccc); }
-        .metrics button.active { background: var(--primary-color, #03a9f4); color: var(--text-primary-color, #fff); }
+        .metrics button.active, .sources button.active { background: var(--primary-color, #03a9f4); color: var(--text-primary-color, #fff); }
+        .sources { display:inline-flex; flex-wrap:wrap; border:1px solid var(--divider-color, #ccc); border-radius:14px; overflow:hidden; margin:2px 0 4px; }
+        .sources button { font: inherit; font-size:.78em; padding:3px 10px; border:0; background:transparent; cursor:pointer;
+                 color: var(--primary-text-color); }
+        .sources button + button { border-left:1px solid var(--divider-color, #ccc); }
         .plot { position:relative; width:100%; max-width:420px; margin:0 auto; aspect-ratio: 1 / 1.02; }
         svg.rose { position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
         .corner { position:absolute; line-height:1.15; cursor:pointer; z-index:2; }
@@ -294,7 +391,7 @@ class HeliosCompassCard extends HTMLElement {
         .stat .v { font-size:1.05em; color: var(--primary-text-color); white-space:nowrap; }
         .stat .s { font-size:.68em; color: var(--secondary-text-color); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         .buttons { display:flex; gap:6px; justify-content:center; margin-top:10px; flex-wrap:wrap; }
-        .buttons button { flex:1; min-width:56px; max-width:76px; font: inherit; font-size:.8em; padding:5px 4px; border-radius:6px;
+        .buttons button { flex:1; min-width:44px; max-width:72px; font: inherit; font-size:.76em; padding:5px 2px; border-radius:6px; white-space:nowrap;
                  border:1px solid var(--divider-color, #ccc); background: var(--card-background-color, #fff);
                  color: var(--primary-text-color); cursor:pointer; box-shadow: 0 1px 2px rgba(0,0,0,.15); }
         .buttons button.active { color:#e53935; border-color:#e53935; }
@@ -306,18 +403,14 @@ class HeliosCompassCard extends HTMLElement {
           <div class="title">${esc(c.title || '')}</div>
           ${c.show_metric_switch ? `<div class="metrics">${Object.entries(METRICS).map(([k, m]) => `<button data-m="${k}">${m.label}</button>`).join('')}</div>` : ''}
         </div>` : ''}
+        ${c.sources.length > 1 ? `<div class="sources">${c.sources.map((x) => `<button data-src="${esc(x.id)}">${esc(x.name || this._hass?.states[x.entities[0]]?.attributes.friendly_name || x.entities[0])}</button>`).join('')}</div>` : ''}
         <div class="plot">
           <svg class="rose" viewBox="-160 -160 320 320" preserveAspectRatio="xMidYMid meet">
             <g class="static"></g><g class="trace"></g><g class="modules"></g><g class="sun"></g>
           </svg>
           ${corner('top_left')}${corner('top_right')}${corner('bottom_left')}${corner('bottom_right')}
         </div>
-        ${c.show_legend ? `
-        <div class="legend">
-          <div class="head"><span class="l">${esc(c.legend_label)}</span><span class="r">${unit}</span></div>
-          <div class="bar">${c.color_stops.map((s, i) => `<span data-i="${i}" style="background:${s.color}"></span>`).join('')}</div>
-          <div class="ticks">${c.color_stops.map((s, i) => `<span style="left:${(i / Math.max(1, c.color_stops.length - 1)) * 100}%">${tick(s.value)}</span>`).join('')}</div>
-        </div>` : ''}
+        ${c.show_legend ? `<div class="legend">${this._legendHtml()}</div>` : ''}
         ${c.show_stats ? `<div class="stats">
           <div class="stat" data-s="energy"><div class="k">Ertrag</div><div class="v">–</div><div class="s">&nbsp;</div></div>
           <div class="stat" data-s="peak"><div class="k">Spitze</div><div class="v">–</div><div class="s">&nbsp;</div></div>
@@ -332,9 +425,16 @@ class HeliosCompassCard extends HTMLElement {
       this._save('range', this._range);
       this._markButtons();
       this._series = [];
+      this._data = {};
       this._peak = null;
       this._renderPlot();
       this._fetch();
+    }));
+    this.shadowRoot.querySelectorAll('.sources button').forEach((b) => b.addEventListener('click', () => {
+      this._sourceId = b.dataset.src;
+      this._save('source', this._sourceId);
+      this._markButtons();
+      this._switchSource();
     }));
     this.shadowRoot.querySelectorAll('.metrics button').forEach((b) => b.addEventListener('click', () => {
       this._metric = b.dataset.m;
@@ -344,7 +444,7 @@ class HeliosCompassCard extends HTMLElement {
     }));
     this.shadowRoot.querySelectorAll('.corner').forEach((el) => el.addEventListener('click', () => {
       const cfg = c.corners[el.dataset.pos];
-      const entityId = cfg?.entity || (cfg?.type ? c.sun_entity : null);
+      const entityId = cfg?.entity || (cfg?.type === 'source' ? this._src().entities[0] : cfg?.type ? c.sun_entity : null);
       if (!entityId) return;
       this.dispatchEvent(new CustomEvent('hass-more-info', { detail: { entityId }, bubbles: true, composed: true }));
     }));
@@ -357,6 +457,27 @@ class HeliosCompassCard extends HTMLElement {
   _markButtons() {
     this.shadowRoot.querySelectorAll('.buttons button').forEach((b) => b.classList.toggle('active', b.dataset.r === this._range));
     this.shadowRoot.querySelectorAll('.metrics button').forEach((b) => b.classList.toggle('active', b.dataset.m === this._metric));
+    this.shadowRoot.querySelectorAll('.sources button').forEach((b) => b.classList.toggle('active', b.dataset.src === this._sourceId));
+  }
+
+  _legendHtml() {
+    const src = this._src();
+    const stops = src.color_stops;
+    const unit = src.max_power >= 20000 ? 'kW' : 'W';
+    const tick = (v) => (unit === 'kW' ? fmtNum(v / 1000, 1) : Math.round(v));
+    const label = src.legend_label || (this._config.sources.length > 1 && src.name ? `${src.name}-Leistung` : this._config.legend_label);
+    return `<div class="head"><span class="l">${esc(label)}</span><span class="r">${unit}</span></div>
+      <div class="bar">${stops.map((st, i) => `<span data-i="${i}" style="background:${st.color}"></span>`).join('')}</div>
+      <div class="ticks">${stops.map((st, i) => `<span style="left:${(i / Math.max(1, stops.length - 1)) * 100}%">${tick(st.value)}</span>`).join('')}</div>`;
+  }
+
+  _switchSource() {
+    const lg = this.shadowRoot.querySelector('.legend');
+    if (lg) lg.innerHTML = this._legendHtml();
+    this._renderModules();
+    this._composeSeries();
+    this._renderPlot();
+    this._update(true);
   }
 
   _R() { return 108; }
@@ -372,8 +493,13 @@ class HeliosCompassCard extends HTMLElement {
     let s = '';
     if (c.image) {
       const size = 2 * R * Number(c.image_scale || 0.8);
-      s += `<image href="${esc(c.image)}" x="${-size / 2}" y="${-size / 2}" width="${size}" height="${size}"
-              preserveAspectRatio="xMidYMid meet" opacity="${Number(c.image_opacity ?? 1)}" transform="rotate(${Number(c.image_rotation) || 0})"/>`;
+      const dx = ((Number(c.image_offset_x) || 0) / 100) * R;
+      const dy = (-(Number(c.image_offset_y) || 0) / 100) * R;
+      const rot = Number(c.image_rotation) || 0;
+      if (c.image_clip) s += `<defs><clipPath id="hc-clip"><circle r="${R}"/></clipPath></defs>`;
+      s += `<g ${c.image_clip ? 'clip-path="url(#hc-clip)"' : ''}><image href="${esc(c.image)}" x="${-size / 2}" y="${-size / 2}" width="${size}" height="${size}"
+              preserveAspectRatio="xMidYMid meet" opacity="${Number(c.image_opacity ?? 1)}"
+              transform="translate(${dx.toFixed(2)} ${dy.toFixed(2)}) rotate(${rot})"/></g>`;
     }
     const line = 'rgba(46,160,120,.55)';
     for (let i = 0; i < 16; i++) {
@@ -396,7 +522,7 @@ class HeliosCompassCard extends HTMLElement {
   _renderModules() {
     const R = this._R();
     let s = '';
-    this._config.modules.forEach((m) => {
+    this._src().modules.forEach((m) => {
       const az = Number(m.azimuth);
       const col = m.color || '#ff9800';
       const len = R * 0.9;
@@ -420,7 +546,7 @@ class HeliosCompassCard extends HTMLElement {
   /* ---------- Auswertung ---------- */
   _aggregate() {
     const c = this._config;
-    const stops = c.color_stops;
+    const stops = this._src().color_stops;
     const n = c.sectors;
     const width = 360 / n;
     const mk = () => Array.from({ length: n }, () => new Array(stops.length).fill(0));
@@ -449,7 +575,7 @@ class HeliosCompassCard extends HTMLElement {
     if (!this._built) return;
     const c = this._config;
     const R = this._R();
-    const stops = c.color_stops;
+    const stops = this._src().color_stops;
     const agg = this._aggregate();
     const metric = this._metric;
     const { n, width } = agg;
@@ -547,7 +673,7 @@ class HeliosCompassCard extends HTMLElement {
   }
 
   _binLabel(b) {
-    const stops = this._config.color_stops;
+    const stops = this._src().color_stops;
     return stops[b + 1] ? `${fmtPower(stops[b].value)}–${fmtPower(stops[b + 1].value)}` : `ab ${fmtPower(stops[b].value)}`;
   }
 
@@ -584,12 +710,16 @@ class HeliosCompassCard extends HTMLElement {
     if (!cfg) return '';
     if (cfg.type === 'azimuth') return `${Math.round(sun.azimuth)}°`;
     if (cfg.type === 'elevation') return `${Math.round(sun.elevation)}°`;
+    if (cfg.type === 'source') {
+      const p = this._livePower();
+      return p >= 1000 ? `${fmtNum(p / 1000, p >= 10000 ? 1 : 2)}kW` : `${fmtNum(p)}W`;
+    }
     const st = this._hass.states[cfg.entity];
     if (!st) return '–';
     const n = parseFloat(st.state);
     if (!isFinite(n)) return st.state;
     const unit = cfg.unit ?? st.attributes.unit_of_measurement ?? '';
-    if (unit === 'W' && Math.abs(n) >= 10000) return `${fmtNum(n / 1000, 1)}kW`;
+    if (unit === 'W' && Math.abs(n) >= 1000) return `${fmtNum(n / 1000, Math.abs(n) >= 10000 ? 1 : 2)}kW`;
     const dec = cfg.decimals ?? (Math.abs(n) >= 100 || unit === 'W' ? 0 : 1);
     return `${fmtNum(n, dec)}${unit}`;
   }
@@ -597,16 +727,21 @@ class HeliosCompassCard extends HTMLElement {
   _update(force) {
     const c = this._config;
     const sun = this._sunNow();
-    const pvState = this._hass.states[c.power_entity];
-    const power = (parseFloat(pvState?.state) || 0) * this._factor(c.power_entity);
-    const sig = `${sun.azimuth.toFixed(1)}|${sun.elevation.toFixed(1)}|${power}|`
+    const src = this._src();
+    const power = this._livePower(src);
+    const sig = `${this._sourceId}|${sun.azimuth.toFixed(1)}|${sun.elevation.toFixed(1)}|${power}|`
       + Object.values(c.corners).map((x) => (x?.entity ? this._hass.states[x.entity]?.state : '')).join('|');
     if (!force && sig === this._sig) return;
     this._sig = sig;
 
     this.shadowRoot.querySelectorAll('.corner').forEach((el) => {
       const cfg = c.corners[el.dataset.pos];
-      el.querySelector('.lbl').textContent = cfg?.name ?? (cfg?.entity ? this._hass.states[cfg.entity]?.attributes.friendly_name : '') ?? '';
+      let lbl = cfg?.name;
+      if (lbl === undefined || lbl === null) {
+        if (cfg?.type === 'source') lbl = c.sources.length > 1 && src.name ? `${src.name}-Leistung` : 'PV-Leistung';
+        else lbl = cfg?.entity ? this._hass.states[cfg.entity]?.attributes.friendly_name : '';
+      }
+      el.querySelector('.lbl').textContent = lbl ?? '';
       el.querySelector('.val').textContent = this._cornerValue(cfg, sun);
     });
 
@@ -625,91 +760,163 @@ class HeliosCompassCard extends HTMLElement {
 }
 
 /* =====================================================================
- * Grafischer Editor
+ * Grafischer Editor – alle Optionen ohne YAML einstellbar
  * ===================================================================== */
 const CORNER_POS = { top_left: 'Oben links', top_right: 'Oben rechts', bottom_left: 'Unten links', bottom_right: 'Unten rechts' };
+const RANGE_OPTIONS = Object.entries(RANGES).map(([value, r]) => ({ value, label: r.label }));
+const num = (min, max, step, unit, mode = 'box') => ({ number: { min, max, step, mode, ...(unit ? { unit_of_measurement: unit } : {}) } });
+const COLOR = { text: { type: 'color' } };
 
 const LABELS = {
-  title: 'Titel',
-  power_entity: 'PV-Leistungssensor',
+  title: 'Titel (leer = kein Titel)',
+  power_entity: 'PV-Leistungssensor (wenn keine Anlagenliste genutzt wird)',
   max_power: 'Maximale Leistung (obere Leistungsklasse)',
-  metric: 'Standard-Ansicht',
-  sectors: 'Anzahl Richtungssektoren',
-  default_range: 'Standard-Zeitraum',
-  ranges: 'Zeitraum-Buttons',
-  show_metric_switch: 'Umschalter Zeit / Ertrag / Ø Leistung anzeigen',
-  show_stats: 'Kennzahlen anzeigen',
-  show_legend: 'Farbskala anzeigen',
   legend_label: 'Beschriftung Farbskala',
-  image: 'Bildpfad, optional (z. B. /local/helios/haus.png)',
+  metric: 'Standard-Ansicht',
+  default_range: 'Standard-Zeitraum',
+  ranges: 'Angezeigte Zeitraum-Buttons',
+  sectors: 'Anzahl Richtungssektoren',
+  sector_opacity: 'Deckkraft der Sektoren',
+  show_metric_switch: 'Umschalter Zeit / Ertrag / Ø Leistung',
+  show_stats: 'Kennzahlen',
+  show_legend: 'Farbskala',
+  image: 'Bildpfad (optional, z. B. /local/helios/haus.png)',
   image_scale: 'Bildgröße',
-  image_rotation: 'Bilddrehung (°)',
+  image_rotation: 'Drehung (Norden des Bildes nach oben)',
+  image_offset_x: 'Verschieben links ↔ rechts',
+  image_offset_y: 'Verschieben unten ↕ oben',
   image_opacity: 'Bild-Deckkraft',
+  image_clip: 'Bild rund auf den Kompass zuschneiden',
   mode: 'Anzeige',
   entity: 'Entität',
-  name: 'Beschriftung',
-  modules: 'Modulfelder (Liste mit name, azimuth, tilt, kwp, color)',
-  color_stops: 'Leistungsklassen (Liste mit value, color) – leer = automatisch',
-  sector_opacity: 'Deckkraft der Sektoren',
+  name: 'Name',
+  unit: 'Einheit (optional, überschreibt die der Entität)',
+  decimals: 'Nachkommastellen (optional)',
+  show_total: '„Gesamt“ (Summe aller Anlagen) anzeigen',
+  total_name: 'Bezeichnung für die Summe',
+  total_max_power: 'Max. Leistung „Gesamt“ (leer = automatisch)',
+  default_source: 'Standard-Anlage',
+  value: 'Ab Leistung',
+  color: 'Farbe',
+  azimuth: 'Azimut (90 = Ost, 180 = Süd, 270 = West)',
+  tilt: 'Neigung',
+  kwp: 'Leistung (kWp, optional)',
   sun_entity: 'Sonnen-Entität',
   stats_type: '7/14 Tage: Stundenwert',
-  refresh_interval: 'Aktualisierung (Sekunden)',
-  corners: 'Ecken',
+  refresh_interval: 'Verlauf neu laden alle',
+  latitude: 'Breitengrad (leer = HA-Standort)',
+  longitude: 'Längengrad (leer = HA-Standort)',
+  unit_factor: 'Umrechnungsfaktor auf W (leer = automatisch)',
   ...CORNER_POS,
 };
 
-const cornerSchema = (pos) => ({
-  type: 'expandable',
-  name: pos,
-  title: CORNER_POS[pos],
-  schema: [
-    { name: 'mode', selector: { select: { mode: 'dropdown', options: [
-      { value: 'entity', label: 'Entität' }, { value: 'azimuth', label: 'Sonnenazimut' },
-      { value: 'elevation', label: 'Sonnenhöhe' }, { value: 'none', label: 'Ausblenden' }] } } },
-    { name: 'entity', selector: { entity: {} } },
-    { name: 'name', selector: { text: {} } },
-  ],
-});
+const HELPERS = {
+  image_rotation: 'Positiv = im Uhrzeigersinn. Tipp: In Google Maps ist Norden oben – so soll dein Haus liegen.',
+  image_offset_x: 'In % des Kompassradius, damit das Haus genau in der Mitte sitzt.',
+  image_offset_y: 'In % des Kompassradius, damit das Haus genau in der Mitte sitzt.',
+  sectors: '36 = 10° breite Sektoren, 16 = eine pro Kompassrichtung',
+  unit_factor: 'Nur nötig, wenn der Sensor weder W noch kW meldet (z. B. 1000 für kW).',
+};
 
-const EDITOR_SCHEMA = [
-  { name: 'title', selector: { text: {} } },
-  { name: 'power_entity', required: true, selector: { entity: { domain: 'sensor' } } },
-  { type: 'grid', name: '', schema: [
-    { name: 'max_power', selector: { number: { min: 50, max: 200000, step: 50, mode: 'box', unit_of_measurement: 'W' } } },
-    { name: 'legend_label', selector: { text: {} } },
+const SECTIONS = [
+  { key: 'general', title: 'Allgemein', icon: '⚙️', open: true, schema: [
+    { name: 'title', selector: { text: {} } },
+    { name: 'power_entity', selector: { entity: { domain: 'sensor' } } },
+    { type: 'grid', name: '', schema: [
+      { name: 'max_power', selector: num(50, 200000, 50, 'W') },
+      { name: 'legend_label', selector: { text: {} } },
+    ] },
   ] },
-  { type: 'grid', name: '', schema: [
-    { name: 'metric', selector: { select: { mode: 'dropdown', options: [
-      { value: 'time', label: 'Zeitanteil' }, { value: 'energy', label: 'Ertrag' }, { value: 'avg_power', label: 'Ø Leistung' }] } } },
-    { name: 'default_range', selector: { select: { mode: 'dropdown', options: Object.entries(RANGES).map(([value, r]) => ({ value, label: r.label })) } } },
-  ] },
-  { name: 'ranges', selector: { select: { multiple: true, mode: 'list', options: Object.entries(RANGES).map(([value, r]) => ({ value, label: r.label })) } } },
-  { name: 'sectors', selector: { number: { min: 8, max: 72, step: 4, mode: 'slider' } } },
-  { type: 'grid', name: '', schema: [
+  { key: 'display', title: 'Darstellung', icon: '🧭', schema: [
+    { type: 'grid', name: '', schema: [
+      { name: 'metric', selector: { select: { mode: 'dropdown', options: [
+        { value: 'time', label: 'Zeitanteil' }, { value: 'energy', label: 'Ertrag' }, { value: 'avg_power', label: 'Ø Leistung' }] } } },
+      { name: 'default_range', selector: { select: { mode: 'dropdown', options: RANGE_OPTIONS } } },
+    ] },
+    { name: 'ranges', selector: { select: { multiple: true, mode: 'list', options: RANGE_OPTIONS } } },
+    { name: 'sectors', selector: num(8, 72, 4, null, 'slider') },
+    { name: 'sector_opacity', selector: num(0.2, 1, 0.05, null, 'slider') },
     { name: 'show_metric_switch', selector: { boolean: {} } },
     { name: 'show_stats', selector: { boolean: {} } },
     { name: 'show_legend', selector: { boolean: {} } },
   ] },
-  { type: 'expandable', title: 'Hausbild', icon: 'mdi:home-roof', flatten: true, schema: [
+  { key: 'image', title: 'Hausbild', icon: '🏠', schema: [
     { name: 'image', selector: { text: {} } },
-    { name: 'image_scale', selector: { number: { min: 0.1, max: 1.6, step: 0.05, mode: 'slider' } } },
-    { name: 'image_rotation', selector: { number: { min: -180, max: 180, step: 1, mode: 'slider', unit_of_measurement: '°' } } },
-    { name: 'image_opacity', selector: { number: { min: 0, max: 1, step: 0.05, mode: 'slider' } } },
+    { name: 'image_rotation', selector: num(-180, 180, 0.5, '°', 'slider') },
+    { name: 'image_offset_x', selector: num(-100, 100, 0.5, '%', 'slider') },
+    { name: 'image_offset_y', selector: num(-100, 100, 0.5, '%', 'slider') },
+    { name: 'image_scale', selector: num(0.1, 2.5, 0.01, null, 'slider') },
+    { name: 'image_opacity', selector: num(0, 1, 0.05, null, 'slider') },
+    { name: 'image_clip', selector: { boolean: {} } },
   ] },
-  { type: 'expandable', name: 'corners', title: 'Werte in den Ecken', icon: 'mdi:border-all', schema: Object.keys(CORNER_POS).map(cornerSchema) },
-  { type: 'expandable', title: 'Modulausrichtung', icon: 'mdi:solar-panel', flatten: true, schema: [
-    { name: 'modules', selector: { object: {} } },
-  ] },
-  { type: 'expandable', title: 'Farben & Erweitert', icon: 'mdi:tune', flatten: true, schema: [
-    { name: 'color_stops', selector: { object: {} } },
-    { name: 'sector_opacity', selector: { number: { min: 0.2, max: 1, step: 0.05, mode: 'slider' } } },
+  { key: 'corners', title: 'Werte in den Ecken', icon: '🔲', custom: 'corners' },
+  { key: 'sources', title: 'Anlagen (z. B. BKW + Dach)', icon: '🔆', custom: 'sources' },
+  { key: 'modules', title: 'Modulausrichtung (für alle Anlagen)', icon: '📐', custom: 'modules' },
+  { key: 'stops', title: 'Leistungsklassen & Farben', icon: '🎨', custom: 'stops' },
+  { key: 'advanced', title: 'Erweitert', icon: '🛠️', schema: [
     { type: 'grid', name: '', schema: [
       { name: 'sun_entity', selector: { entity: { domain: 'sun' } } },
       { name: 'stats_type', selector: { select: { mode: 'dropdown', options: [{ value: 'mean', label: 'Mittelwert' }, { value: 'max', label: 'Maximum' }] } } },
     ] },
-    { name: 'refresh_interval', selector: { number: { min: 30, max: 3600, step: 30, mode: 'box', unit_of_measurement: 's' } } },
+    { name: 'refresh_interval', selector: num(30, 3600, 30, 's') },
+    { type: 'grid', name: '', schema: [
+      { name: 'latitude', selector: num(-90, 90, 0.0001) },
+      { name: 'longitude', selector: num(-180, 180, 0.0001) },
+    ] },
+    { name: 'unit_factor', selector: num(0.000001, 1000000, 0.000001) },
   ] },
 ];
+
+const CORNER_SCHEMA = [
+  { name: 'mode', selector: { select: { mode: 'dropdown', options: [
+    { value: 'source', label: 'Leistung der gewählten Anlage' }, { value: 'entity', label: 'Beliebige Entität' },
+    { value: 'azimuth', label: 'Sonnenazimut' }, { value: 'elevation', label: 'Sonnenhöhe' }, { value: 'none', label: 'Ausblenden' }] } } },
+  { name: 'name', selector: { text: {} } },
+];
+const CORNER_ENTITY_SCHEMA = [
+  { name: 'entity', selector: { entity: {} } },
+  { type: 'grid', name: '', schema: [
+    { name: 'unit', selector: { text: {} } },
+    { name: 'decimals', selector: num(0, 4, 1) },
+  ] },
+];
+const SOURCE_SCHEMA = [
+  { type: 'grid', name: '', schema: [
+    { name: 'name', selector: { text: {} } },
+    { name: 'entity', required: true, selector: { entity: { domain: 'sensor' } } },
+  ] },
+  { type: 'grid', name: '', schema: [
+    { name: 'max_power', selector: num(50, 200000, 50, 'W') },
+    { name: 'legend_label', selector: { text: {} } },
+  ] },
+];
+const MODULE_SCHEMA = [
+  { type: 'grid', name: '', schema: [
+    { name: 'name', selector: { text: {} } },
+    { name: 'color', selector: COLOR },
+  ] },
+  { name: 'azimuth', selector: num(0, 359, 1, '°', 'slider') },
+  { name: 'tilt', selector: num(0, 90, 1, '°', 'slider') },
+  { name: 'kwp', selector: num(0, 1000, 0.01, 'kWp') },
+];
+const STOP_SCHEMA = [
+  { type: 'grid', name: '', schema: [
+    { name: 'value', selector: num(0, 1000000, 1, 'W') },
+    { name: 'color', selector: COLOR },
+  ] },
+];
+const TOTAL_SCHEMA = [
+  { name: 'show_total', selector: { boolean: {} } },
+  { type: 'grid', name: '', schema: [
+    { name: 'total_name', selector: { text: {} } },
+    { name: 'total_max_power', selector: num(50, 1000000, 50, 'W') },
+  ] },
+];
+
+const FORM_DEFAULTS = { ...DEFAULTS, show_total: true };
+const schemaKeys = (schema) => schema.flatMap((s) => (s.schema ? schemaKeys(s.schema) : [s.name]));
+const clone = (o) => JSON.parse(JSON.stringify(o ?? null));
+const autoStops = (max) => DEFAULT_COLORS.map((color, i) => ({ value: Math.round((max / (DEFAULT_COLORS.length - 1)) * i), color }));
 
 async function ensureHaForm() {
   if (customElements.get('ha-form')) return;
@@ -723,85 +930,315 @@ async function ensureHaForm() {
   await customElements.whenDefined('ha-form');
 }
 
+const EDITOR_CSS = `
+  .hc-editor { display:flex; flex-direction:column; gap:8px; }
+  .hc-editor details { border:1px solid var(--divider-color, #ddd); border-radius:10px; background: var(--card-background-color); }
+  .hc-editor summary { cursor:pointer; padding:10px 12px; font-weight:500; list-style:none; display:flex; align-items:center; gap:8px; }
+  .hc-editor summary::-webkit-details-marker { display:none; }
+  .hc-editor summary::after { content:'▸'; margin-left:auto; transition:transform .2s; color: var(--secondary-text-color); }
+  .hc-editor details[open] > summary::after { transform:rotate(90deg); }
+  .hc-editor .body { padding:0 12px 12px; display:flex; flex-direction:column; gap:8px; }
+  .hc-editor .item { border:1px solid var(--divider-color, #ddd); border-radius:8px; padding:8px; background: var(--secondary-background-color, rgba(127,127,127,.05)); }
+  .hc-editor .item-head { display:flex; align-items:center; gap:6px; margin-bottom:6px; font-weight:500; }
+  .hc-editor .item-head .t { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .hc-editor .swatch { width:14px; height:14px; border-radius:3px; border:1px solid rgba(0,0,0,.2); flex-shrink:0; }
+  .hc-editor button.b { font:inherit; font-size:.85em; border:1px solid var(--divider-color, #ccc); background: var(--card-background-color, #fff);
+    color: var(--primary-text-color); border-radius:6px; padding:4px 10px; cursor:pointer; }
+  .hc-editor button.b:hover:not(:disabled) { border-color: var(--primary-color); color: var(--primary-color); }
+  .hc-editor button.b:disabled { opacity:.35; cursor:default; }
+  .hc-editor button.add { border-style:dashed; width:100%; padding:7px; }
+  .hc-editor button.icon { padding:2px 7px; }
+  .hc-editor .row { display:flex; gap:6px; flex-wrap:wrap; }
+  .hc-editor .hint { font-size:.82em; color: var(--secondary-text-color); line-height:1.35; }
+  .hc-editor .sub { margin-top:6px; }
+  .hc-editor .sub > details { background:transparent; }
+`;
+
 class HeliosCompassCardEditor extends HTMLElement {
+  constructor() {
+    super();
+    this._open = new Set(['general']);
+  }
+
   setConfig(config) {
-    this._config = { ...config };
+    if (this._lastJson && JSON.stringify(config) === this._lastJson) return; // eigene Änderung – Fokus behalten
+    this._work = clone(config) || {};
     this._render();
   }
 
   set hass(hass) {
     this._hass = hass;
-    if (this._form) this._form.hass = hass;
-    else this._render();
+    this.querySelectorAll('ha-form').forEach((f) => { f.hass = hass; });
+    if (!this._rendered) this._render();
+  }
+
+  /* ---------- Werte setzen & melden ---------- */
+  _set(k, v, obj = this._work) {
+    if (v === undefined || v === null || (v === '' && k !== 'title') || (Array.isArray(v) && !v.length)) delete obj[k];
+    else obj[k] = v;
+  }
+
+  _emit() {
+    const cfg = clone(this._work);
+    cfg.type = cfg.type || 'custom:helios-compass-card';
+    this._lastJson = JSON.stringify(cfg);
+    this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: cfg }, bubbles: true, composed: true }));
+  }
+
+  /* ---------- Bausteine ---------- */
+  _form(schema, data, onChange) {
+    const f = document.createElement('ha-form');
+    f.computeLabel = (s) => LABELS[s.name] ?? s.title ?? s.name;
+    f.computeHelper = (s) => HELPERS[s.name];
+    f.hass = this._hass;
+    f.schema = schema;
+    f.data = data;
+    f.addEventListener('value-changed', (e) => { e.stopPropagation(); onChange(e.detail.value); });
+    return f;
+  }
+
+  _btn(label, onClick, cls = '', disabled = false, title = '') {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = `b ${cls}`;
+    b.textContent = label;
+    b.disabled = disabled;
+    if (title) b.title = title;
+    b.addEventListener('click', (e) => { e.preventDefault(); onClick(); });
+    return b;
+  }
+
+  _details(key, title, icon, open) {
+    const d = document.createElement('details');
+    if (this._open.has(key) || open) d.open = true;
+    d.addEventListener('toggle', () => (d.open ? this._open.add(key) : this._open.delete(key)));
+    const s = document.createElement('summary');
+    s.textContent = `${icon ? `${icon}  ` : ''}${title}`;
+    const body = document.createElement('div');
+    body.className = 'body';
+    d.append(s, body);
+    return { d, body };
+  }
+
+  _hint(text) {
+    const p = document.createElement('div');
+    p.className = 'hint';
+    p.textContent = text;
+    return p;
+  }
+
+  /** Generische Listenbearbeitung mit Hinzufügen / Entfernen / Sortieren */
+  _list(parent, { items, schema, title, swatch, newItem, addLabel, onChange, nested, key }) {
+    items.forEach((item, i) => {
+      const box = document.createElement('div');
+      box.className = 'item';
+      const head = document.createElement('div');
+      head.className = 'item-head';
+      const sw = document.createElement('span');
+      if (swatch) { sw.className = 'swatch'; sw.style.background = swatch(item) || 'transparent'; head.append(sw); }
+      const t = document.createElement('span');
+      t.className = 't';
+      t.textContent = title(item, i);
+      head.append(t,
+        this._btn('↑', () => { [items[i - 1], items[i]] = [items[i], items[i - 1]]; onChange(items, true); }, 'icon', i === 0, 'nach oben'),
+        this._btn('↓', () => { [items[i + 1], items[i]] = [items[i], items[i + 1]]; onChange(items, true); }, 'icon', i === items.length - 1, 'nach unten'),
+        this._btn('✕', () => { items.splice(i, 1); onChange(items, true); }, 'icon', false, 'entfernen'));
+      box.append(head, this._form(schema, { ...item }, (v) => {
+        const next = { ...items[i] };
+        schemaKeys(schema).forEach((k) => this._set(k, v[k], next));
+        items[i] = next;
+        t.textContent = title(next, i);
+        if (swatch) sw.style.background = swatch(next) || 'transparent';
+        onChange(items, false);
+      }));
+      if (nested) nested(box, () => items[i], i, `${key}-${i}`, (changed, structural) => { items[i] = changed; onChange(items, structural); });
+      parent.append(box);
+    });
+    parent.append(this._btn(`+ ${addLabel}`, () => { items.push(newItem()); onChange(items, true); }, 'add'));
+  }
+
+  _stopsEditor(parent, stops, maxPower, onChange) {
+    if (!stops.length) parent.append(this._hint('Automatisch: 9 Farbstufen von 0 bis zur maximalen Leistung. Zum Anpassen „Farben bearbeiten“ wählen.'));
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.append(this._btn(stops.length ? '↺ Standardfarben neu erzeugen' : '🎨 Farben bearbeiten', () => onChange(autoStops(maxPower()), true)));
+    if (stops.length) row.append(this._btn('Automatisch (zurücksetzen)', () => onChange([], true)));
+    parent.append(row);
+    if (!stops.length) return;
+    this._list(parent, {
+      items: stops,
+      schema: STOP_SCHEMA,
+      title: (s, i) => (stops[i + 1] ? `${fmtPower(s.value ?? 0)} – ${fmtPower(stops[i + 1].value ?? 0)}` : `ab ${fmtPower(s.value ?? 0)}`),
+      swatch: (s) => s.color,
+      newItem: () => ({ value: (Number(stops[stops.length - 1]?.value) || 0) + 100, color: '#888888' }),
+      addLabel: 'Stufe hinzufügen',
+      onChange,
+    });
+  }
+
+  _modulesEditor(parent, modules, onChange, key) {
+    this._list(parent, {
+      key,
+      items: modules,
+      schema: MODULE_SCHEMA,
+      title: (m) => `${m.name || 'Modulfeld'} · ${dir16(Number(m.azimuth) || 0)} ${Math.round(Number(m.azimuth) || 0)}°${m.tilt !== undefined ? ` · ${m.tilt}° Neigung` : ''}`,
+      swatch: (m) => m.color || '#ff9800',
+      newItem: () => ({ name: '', azimuth: 180, tilt: 30, color: '#ff9800' }),
+      addLabel: 'Modulfeld hinzufügen',
+      onChange,
+    });
+  }
+
+  /* ---------- Abschnitte ---------- */
+  _renderCorners(body) {
+    const w = this._work;
+    const corners = { ...defaultCorners(), ...(w.corners || {}) };
+    Object.entries(CORNER_POS).forEach(([pos, label]) => {
+      const box = document.createElement('div');
+      box.className = 'item';
+      const head = document.createElement('div');
+      head.className = 'item-head';
+      head.textContent = label;
+      box.append(head);
+      const cc = corners[pos];
+      const mode = !cc ? 'none' : (cc.type || 'entity');
+      const write = (next) => { w.corners = { ...defaultCorners(), ...(w.corners || {}), [pos]: next }; this._emit(); };
+      box.append(this._form(CORNER_SCHEMA, { mode, name: cc?.name }, (v) => {
+        const cur = { ...defaultCorners(), ...(w.corners || {}) }[pos];
+        if (v.mode !== mode) {
+          if (v.mode === 'none') write(null);
+          else if (v.mode === 'entity') write({ entity: cur?.entity || w.power_entity || '', ...(v.name ? { name: v.name } : {}) });
+          else write({ type: v.mode, ...(v.name ? { name: v.name } : {}) });
+          this._render();
+          return;
+        }
+        if (!cur) return;
+        const next = { ...cur };
+        this._set('name', v.name, next);
+        write(next);
+      }));
+      if (mode === 'entity') {
+        box.append(this._form(CORNER_ENTITY_SCHEMA, { entity: cc.entity, unit: cc.unit, decimals: cc.decimals }, (v) => {
+          const next = { ...{ ...defaultCorners(), ...(w.corners || {}) }[pos] };
+          ['entity', 'unit', 'decimals'].forEach((k) => this._set(k, v[k], next));
+          write(next);
+        }));
+      }
+      body.append(box);
+    });
+  }
+
+  _renderSources(body) {
+    const w = this._work;
+    const sources = clone(w.sources) || [];
+    body.append(this._hint(sources.length
+      ? 'Über der Rose erscheint ein Umschalter. Jede Anlage hat eigene Leistungsklassen und Modulfelder.'
+      : 'Leer = es wird nur der PV-Leistungssensor aus „Allgemein“ genutzt. Füge Anlagen hinzu, um mehrere Sensoren umschaltbar zu machen.'));
+    this._list(body, {
+      key: 'src',
+      items: sources,
+      schema: SOURCE_SCHEMA,
+      title: (s, i) => `${s.name || `Anlage ${i + 1}`}${s.entity ? ` · ${s.entity}` : ''}`,
+      newItem: () => (sources.length || !w.power_entity
+        ? { name: '', entity: '' }
+        : { name: 'Anlage 1', entity: w.power_entity, ...(w.max_power ? { max_power: w.max_power } : {}) }),
+      addLabel: 'Anlage hinzufügen',
+      onChange: (items, structural) => { this._set('sources', clone(items)); this._emit(); if (structural) this._render(); },
+      nested: (box, get, i, key, update) => {
+        const item = get();
+        const sub = document.createElement('div');
+        sub.className = 'sub';
+        const m = this._details(`${key}-mod`, `Modulfelder dieser Anlage (${(item.modules || []).length})`, '📐');
+        this._modulesEditor(m.body, clone(item.modules) || [], (mods, st) => {
+          const next = { ...get() };
+          this._set('modules', clone(mods), next);
+          update(next, st);
+        }, `${key}-mods`);
+        const c = this._details(`${key}-col`, `Leistungsklassen dieser Anlage (${(item.color_stops || []).length ? 'eigene' : 'automatisch'})`, '🎨');
+        this._stopsEditor(c.body, clone(item.color_stops) || [], () => Number(get().max_power) || Number(w.max_power) || DEFAULTS.max_power, (stops, st) => {
+          const next = { ...get() };
+          this._set('color_stops', clone(stops), next);
+          update(next, st);
+        });
+        sub.append(m.d, c.d);
+        box.append(sub);
+      },
+    });
+
+    if (sources.length > 1) {
+      const t = this._details('total', 'Summe „Gesamt“', 'Σ');
+      t.body.append(this._form(TOTAL_SCHEMA, {
+        show_total: w.show_total ?? true, total_name: w.total_name ?? DEFAULTS.total_name, total_max_power: w.total_max_power,
+      }, (v) => {
+        this._set('show_total', v.show_total === true ? undefined : v.show_total);
+        this._set('total_name', v.total_name === DEFAULTS.total_name ? undefined : v.total_name);
+        this._set('total_max_power', v.total_max_power);
+        this._emit();
+      }));
+      const cs = this._details('total-col', `Leistungsklassen „Gesamt“ (${(w.total_color_stops || []).length ? 'eigene' : 'automatisch'})`, '🎨');
+      this._stopsEditor(cs.body, clone(w.total_color_stops) || [],
+        () => Number(w.total_max_power) || sources.reduce((a, s) => a + (Number(s.max_power) || Number(w.max_power) || DEFAULTS.max_power), 0),
+        (stops, st) => { this._set('total_color_stops', clone(stops)); this._emit(); if (st) this._render(); });
+      t.body.append(cs.d);
+      body.append(t.d);
+    }
+
+    if (sources.length) {
+      const opts = sources.filter((s) => s.entity).map((s, i) => ({ value: s.entity, label: s.name || `Anlage ${i + 1}` }));
+      if (sources.length > 1 && w.show_total !== false) opts.push({ value: 'total', label: w.total_name || 'Gesamt' });
+      body.append(this._form([{ name: 'default_source', selector: { select: { mode: 'dropdown', options: opts } } }],
+        { default_source: w.default_source ?? opts[0]?.value }, (v) => { this._set('default_source', v.default_source); this._emit(); }));
+    }
+  }
+
+  _renderSection(sec, body) {
+    const w = this._work;
+    if (sec.custom === 'corners') return this._renderCorners(body);
+    if (sec.custom === 'sources') return this._renderSources(body);
+    if (sec.custom === 'modules') {
+      body.append(this._hint('Gestrichelte Pfeile zeigen, wohin deine Module zeigen. Diese Modulfelder erscheinen bei jeder Anlage; eigene Felder je Anlage findest du unter „Anlagen“.'));
+      return this._modulesEditor(body, clone(w.modules) || [], (mods, st) => { this._set('modules', clone(mods)); this._emit(); if (st) this._render(); }, 'gmods');
+    }
+    if (sec.custom === 'stops') {
+      body.append(this._hint((w.sources || []).length
+        ? 'Gilt für Anlagen ohne eigene Leistungsklassen und ohne eigene maximale Leistung.'
+        : 'Jede Stufe beginnt bei „Ab Leistung“ und reicht bis zur nächsten Stufe.'));
+      return this._stopsEditor(body, clone(w.color_stops) || [], () => Number(w.max_power) || DEFAULTS.max_power,
+        (stops, st) => { this._set('color_stops', clone(stops)); this._emit(); if (st) this._render(); });
+    }
+    const keys = schemaKeys(sec.schema);
+    const data = {};
+    keys.forEach((k) => { data[k] = w[k] ?? FORM_DEFAULTS[k]; });
+    body.append(this._form(sec.schema, data, (v) => {
+      keys.forEach((k) => {
+        const val = v[k];
+        if (!(k in w) && JSON.stringify(val) === JSON.stringify(FORM_DEFAULTS[k])) return; // Standardwerte nicht in YAML schreiben
+        this._set(k, val);
+      });
+      this._emit();
+    }));
+    return undefined;
   }
 
   async _render() {
-    if (!this._hass || !this._config) return;
-    if (!this._form) {
-      if (this._loading) return;
-      this._loading = true;
-      await ensureHaForm();
-      const form = document.createElement('ha-form');
-      form.computeLabel = (s) => LABELS[s.name] ?? s.title ?? s.name;
-      form.computeHelper = (s) => (s.name === 'modules'
-        ? 'Beispiel: - {name: Süd, azimuth: 180, tilt: 30, kwp: 0.8, color: "#ff9800"}'
-        : s.name === 'sectors' ? '36 = 10° breite Sektoren, 16 = Kompassrichtungen' : undefined);
-      form.addEventListener('value-changed', (e) => this._changed(e.detail.value));
-      this.appendChild(form);
-      this._form = form;
-      this._loading = false;
-    }
-    this._form.hass = this._hass;
-    this._form.schema = EDITOR_SCHEMA;
-    this._form.data = this._toForm(this._config);
-  }
-
-  _toForm(config) {
-    const data = { ...DEFAULTS, ...config };
-    delete data.corners;
-    if (!Array.isArray(config.color_stops)) delete data.color_stops;
-    if (!Array.isArray(config.modules) || !config.modules.length) delete data.modules;
-    if (!data.image) delete data.image;
-    const corners = { ...defaultCorners(config.power_entity), ...(config.corners || {}) };
-    data.corners = {};
-    Object.keys(CORNER_POS).forEach((pos) => {
-      const cc = corners[pos];
-      data.corners[pos] = {
-        mode: !cc ? 'none' : (cc.type || 'entity'),
-        entity: cc?.entity || undefined,
-        name: cc?.name ?? undefined,
-      };
+    if (!this._hass || !this._work) return;
+    if (this._busy) { this._again = true; return; }
+    this._busy = true;
+    await ensureHaForm();
+    this._busy = false;
+    const root = document.createElement('div');
+    root.className = 'hc-editor';
+    const style = document.createElement('style');
+    style.textContent = EDITOR_CSS;
+    root.append(style);
+    SECTIONS.forEach((sec) => {
+      const { d, body } = this._details(sec.key, sec.title, sec.icon, false);
+      this._renderSection(sec, body);
+      root.append(d);
     });
-    return data;
-  }
-
-  _fromForm(data) {
-    const out = {};
-    Object.entries(data).forEach(([k, v]) => {
-      if (k === 'corners' || v === undefined || v === '' || v === null) return;
-      // Standardwerte nicht unnötig in die YAML schreiben
-      if (k !== 'title' && k in DEFAULTS && JSON.stringify(DEFAULTS[k]) === JSON.stringify(v) && !(k in this._config)) return;
-      out[k] = v;
-    });
-    if (data.title === '' || data.title === undefined) out.title = '';
-    const corners = {};
-    Object.entries(data.corners || {}).forEach(([pos, cc]) => {
-      if (!cc || cc.mode === 'none') { corners[pos] = null; return; }
-      if (cc.mode === 'azimuth' || cc.mode === 'elevation') corners[pos] = { type: cc.mode, ...(cc.name ? { name: cc.name } : {}) };
-      else {
-        // Ecke folgt dem PV-Sensor, wenn dieser im Editor gewechselt wird
-        const ent = !cc.entity || cc.entity === this._config.power_entity ? out.power_entity : cc.entity;
-        corners[pos] = { entity: ent, ...(cc.name ? { name: cc.name } : {}) };
-      }
-    });
-    out.corners = corners;
-    return { type: this._config.type || 'custom:helios-compass-card', ...out };
-  }
-
-  _changed(data) {
-    const cfg = this._fromForm(data);
-    this._config = cfg;
-    this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: cfg }, bubbles: true, composed: true }));
+    this.replaceChildren(root);
+    this._rendered = true;
+    if (this._again) { this._again = false; this._render(); }
   }
 }
 
@@ -811,9 +1248,10 @@ if (!customElements.get('helios-compass-card')) {
   window.customCards = window.customCards || [];
   window.customCards.push({
     type: 'helios-compass-card',
-    name: 'Helios Compass',
-    description: 'Solarrose: Sonnenrichtung, PV-Leistung und Ertrag über dem Luftbild des Hauses',
+    name: 'Helios Compass Card',
+    description: 'Sonnenrichtung, PV-Leistung und Ertrag über dem Luftbild des Hauses',
     preview: true,
+    documentationURL: 'https://github.com/muhkuh666/helios-compass-card',
   });
   console.info(`%c HELIOS COMPASS %c v${CARD_VERSION} `, 'color:#fff;background:#f57c00;font-weight:bold', 'color:#f57c00;background:#fff');
 }

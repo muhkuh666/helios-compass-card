@@ -1,5 +1,5 @@
 {
-  "name": "Helios Compass",
+  "name": "Helios Compass Card",
   "filename": "helios-compass-card.js",
   "render_readme": true,
   "homeassistant": "2023.12.0"
