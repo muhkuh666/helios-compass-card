@@ -1,7 +1,7 @@
 # ☀️ Helios Compass Card
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
-![Version](https://img.shields.io/badge/version-1.6.0-orange.svg)
+![Version](https://img.shields.io/badge/version-1.6.1-orange.svg)
 
 **PV-Sonnenkompass für Home Assistant.** Die Karte zeigt, aus welcher Himmelsrichtung deine Solaranlage wie viel liefert. Jeder Sektor der Rose steht für eine Sonnenrichtung. Die Farben zeigen die Leistungsklassen, die Länge den Anteil an Zeit oder Ertrag. Darunter liegt auf Wunsch ein Luftbild deines Hauses.
 
@@ -123,9 +123,18 @@ Die Karte zeichnet über die Rose:
 
 Bei den Bahnen gilt: Abstand zur Mitte = Sonnenhöhe (Rand = Horizont, Mitte = Zenit). Zusammen mit dem Hausbild siehst du, welche Dachfläche zu welcher Jahreszeit wann Sonne bekommt. Fährst du über eine Bahn, erscheinen Auf- und Untergang, Richtung und Mittagshöhe.
 
+Mit dem **☀-Knopf** oben rechts blendest du die Bahnen direkt in der Karte ein und aus. Die Wahl wird gemerkt.
+
 ```yaml
 show_sun_paths: true
+sun_path_toggle: true
 sun_paths: [today, summer, winter]
+```
+
+Die Ansicht **Schatten** (oder jede andere) blendest du über `metrics` aus dem Umschalter aus, im Editor unter 🧭 Darstellung → *Angezeigte Ansichten*:
+
+```yaml
+metrics: [time, energy, avg_power]
 ```
 
 ---
@@ -277,14 +286,16 @@ Die Standardbelegung: oben links die Leistung der gewählten Anlage, oben rechts
 | `title` | `Helios Compass Card` | Kartentitel, `""` blendet ihn aus |
 | `max_power` | `8000` | Obergrenze der Leistungsklassen in W, z. B. `800` für ein BKW |
 | `legend_label` | `PV-Leistung` | Beschriftung der Farbskala |
-| `kwp` | Summe aus `modules` | Anlagenleistung für kWh/kWp (bei nur einem Sensor) |
+| `kwp` | Summe aus `modules` | Anlagenleistung in **kWp** für kWh/kWp (bei nur einem Sensor), z. B. 750 Wp = `0.75` |
 | `metric` | `time` | Standard-Ansicht: `time`, `energy`, `avg_power` oder `shading` |
 | `show_metric_switch` | `true` | Umschalter Zeit / Ertrag / Ø Leistung / Schatten anzeigen |
 | `show_stats` | `true` | Kennzahlen-Zeile anzeigen |
 | `show_legend` | `true` | Farbskala anzeigen |
 | `ranges` | alle | angezeigte Zeitraum-Buttons: `1h`, `8h`, `12h`, `24h`, `7d`, `14d`, `30d`, `1y`, `summer`, `winter` |
 | `season_overlay` | `true` | bei Sommer/Winter die andere Jahreszeit gestrichelt zeigen |
-| `show_sun_paths` | `true` | Sonnenbahnen einzeichnen |
+| `show_sun_paths` | `true` | Sonnenbahnen einzeichnen (Standardzustand) |
+| `sun_path_toggle` | `true` | ☀-Knopf in der Karte zum Ein-/Ausblenden der Sonnenbahnen (wird gemerkt) |
+| `metrics` | alle vier | angezeigte Ansichten im Umschalter: `time`, `energy`, `avg_power`, `shading` |
 | `sun_paths` | `[today, summer, winter]` | welche Bahnen: heute, 21.6., 21.12. |
 | `elevation_bands` | `9` | Schatten-Ansicht: Anzahl Höhenringe (9 = 10°) |
 | `default_range` | `8h` | Start-Zeitraum |
@@ -387,6 +398,7 @@ mode: single
 
 | Version | Änderungen |
 |---|---|
+| **1.6.1** | ☀-Knopf zum Ein-/Ausblenden der Sonnenbahnen; Ansichten im Umschalter wählbar (z. B. ohne „Schatten“); Editor blendet Einzel-Sensor aus, wenn Anlagen angelegt sind; kürzere Feldbezeichnungen |
 | **1.6.0** | Sonnenbahnen (heute mit Auf-/Untergang, 21.6., 21.12.); Ansicht „Schatten“ (Richtung × Sonnenhöhe); Zeiträume 30 Tage, 1 Jahr, Sommer, Winter mit Vergleich; kWp je Anlage und spezifischer Ertrag kWh/kWp |
 | **1.5.1** | Die Ecke oben links folgt bei mehreren Anlagen automatisch der Auswahl, auch bei älteren Konfigurationen |
 | **1.5.0** | Grafischer Editor für alle Optionen: Listen für Anlagen, Modulfelder und Farbstufen mit Farbwähler; Ecken mit Einheit und Nachkommastellen |

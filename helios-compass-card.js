@@ -4,7 +4,7 @@
  *
  * Installation: siehe README.md
  */
-const CARD_VERSION = '1.6.0';
+const CARD_VERSION = '1.6.1';
 
 const DIRS = ['N', 'NNO', 'NO', 'ONO', 'O', 'OSO', 'SO', 'SSO', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
 const dir16 = (az) => DIRS[Math.round((((az % 360) + 360) % 360) / 22.5) % 16];
@@ -62,6 +62,8 @@ const DEFAULTS = {
   modules: [],
   show_total: null, // null = automatisch bei mehreren Anlagen
   show_sun_paths: true,
+  sun_path_toggle: true, // ☀-Knopf in der Karte zum Ein-/Ausblenden der Sonnenbahnen
+  metrics: ['time', 'energy', 'avg_power', 'shading'], // angezeigte Ansichten
   sun_paths: ['today', 'summer', 'winter'],
   elevation_bands: 9, // Verschattungskarte: Anzahl Höhenringe (9 = 10°)
   season_overlay: true, // Sommer/Winter: andere Jahreszeit als Umriss
@@ -156,7 +158,9 @@ class HeliosCompassCard extends HTMLElement {
     const c = { ...DEFAULTS, ...config };
     c.ranges = (Array.isArray(c.ranges) ? c.ranges : DEFAULTS.ranges).filter((r) => RANGES[r]);
     if (!c.ranges.length) c.ranges = DEFAULTS.ranges;
-    if (!METRICS[c.metric]) c.metric = 'time';
+    c.metrics = (Array.isArray(c.metrics) ? c.metrics : DEFAULTS.metrics).filter((m) => METRICS[m]);
+    if (!c.metrics.length) c.metrics = ['time'];
+    if (!c.metrics.includes(c.metric)) c.metric = c.metrics[0];
     c.max_power = Number(c.max_power) || 8000;
     c.sectors = Math.max(4, Math.min(180, Math.round(Number(c.sectors) || 36)));
     const globalModules = Array.isArray(c.modules) ? c.modules.filter(validModule) : [];
@@ -209,7 +213,9 @@ class HeliosCompassCard extends HTMLElement {
     }
     this._config = c;
     this._range = c.ranges.includes(this._load('range')) ? this._load('range') : (c.ranges.includes(c.default_range) ? c.default_range : c.ranges[0]);
-    this._metric = c.show_metric_switch && METRICS[this._load('metric')] ? this._load('metric') : c.metric;
+    this._metric = c.show_metric_switch && c.metrics.includes(this._load('metric')) ? this._load('metric') : c.metric;
+    const sp = this._load('sunpaths');
+    this._showPaths = c.show_sun_paths && c.sun_path_toggle && sp !== null ? sp === '1' : c.show_sun_paths;
     const wanted = this._load('source') || (c.default_source === 'total' ? '__total' : c.default_source);
     this._sourceId = c.sources.some((x) => x.id === wanted) ? wanted : c.sources[0].id;
     this._built = false;
@@ -412,6 +418,10 @@ class HeliosCompassCard extends HTMLElement {
         .metrics button { font: inherit; font-size:.72em; padding:3px 8px; border:0; background:transparent; cursor:pointer;
                  color: var(--secondary-text-color); }
         .metrics button + button { border-left:1px solid var(--divider-color, #ccc); }
+        .tools { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+        .tgl { font: inherit; font-size:.8em; line-height:1; width:24px; height:22px; border-radius:11px; cursor:pointer; padding:0;
+               border:1px solid var(--divider-color, #ccc); background:transparent; color: var(--secondary-text-color); filter: grayscale(1); opacity:.6; }
+        .tgl.on { background:#fff3cd; border-color:#f5b400; filter:none; opacity:1; }
         .metrics button.active, .sources button.active { background: var(--primary-color, #03a9f4); color: var(--text-primary-color, #fff); }
         .sources { display:inline-flex; flex-wrap:wrap; border:1px solid var(--divider-color, #ccc); border-radius:14px; overflow:hidden; margin:2px 0 4px; }
         .sources button { font: inherit; font-size:.78em; padding:3px 10px; border:0; background:transparent; cursor:pointer;
@@ -456,9 +466,12 @@ class HeliosCompassCard extends HTMLElement {
         .yield b { color: var(--primary-text-color); font-weight:500; }
       </style>
       <ha-card>
-        ${c.title || c.show_metric_switch ? `<div class="top">
+        ${c.title || c.show_metric_switch || c.sun_path_toggle ? `<div class="top">
           <div class="title">${esc(c.title || '')}</div>
-          ${c.show_metric_switch ? `<div class="metrics">${Object.entries(METRICS).map(([k, m]) => `<button data-m="${k}">${m.label}</button>`).join('')}</div>` : ''}
+          <div class="tools">
+            ${c.show_metric_switch && c.metrics.length > 1 ? `<div class="metrics">${c.metrics.map((k) => `<button data-m="${k}">${METRICS[k].label}</button>`).join('')}</div>` : ''}
+            ${c.show_sun_paths && c.sun_path_toggle && c.sun_paths.length ? '<button class="tgl" title="Sonnenbahnen ein-/ausblenden">☀</button>' : ''}
+          </div>
         </div>` : ''}
         ${c.sources.length > 1 ? `<div class="sources">${c.sources.map((x) => `<button data-src="${esc(x.id)}">${esc(x.name || this._hass?.states[x.entities[0]]?.attributes.friendly_name || x.entities[0])}</button>`).join('')}</div>` : ''}
         <div class="plot">
@@ -494,6 +507,13 @@ class HeliosCompassCard extends HTMLElement {
       this._markButtons();
       this._switchSource();
     }));
+    this.shadowRoot.querySelector('.tgl')?.addEventListener('click', () => {
+      this._showPaths = !this._showPaths;
+      this._save('sunpaths', this._showPaths ? '1' : '0');
+      this._markButtons();
+      this._renderSunPaths();
+      this._update(true);
+    });
     this.shadowRoot.querySelectorAll('.metrics button').forEach((b) => b.addEventListener('click', () => {
       this._metric = b.dataset.m;
       this._save('metric', this._metric);
@@ -517,6 +537,7 @@ class HeliosCompassCard extends HTMLElement {
     this.shadowRoot.querySelectorAll('.buttons button').forEach((b) => b.classList.toggle('active', b.dataset.r === this._range));
     this.shadowRoot.querySelectorAll('.metrics button').forEach((b) => b.classList.toggle('active', b.dataset.m === this._metric));
     this.shadowRoot.querySelectorAll('.sources button').forEach((b) => b.classList.toggle('active', b.dataset.src === this._sourceId));
+    this.shadowRoot.querySelector('.tgl')?.classList.toggle('on', !!this._showPaths);
   }
 
   _legendHtml() {
@@ -628,7 +649,7 @@ class HeliosCompassCard extends HTMLElement {
     const c = this._config;
     const g = this.shadowRoot.querySelector('g.paths');
     if (!g) return;
-    if (!c.show_sun_paths || !c.sun_paths.length) { g.innerHTML = ''; return; }
+    if (!this._showPaths || !c.sun_paths.length) { g.innerHTML = ''; this._pathsDay = null; return; }
     const R = this._R();
     const rEl = (e) => (1 - Math.max(0, e) / 90) * R;
     const now = new Date();
@@ -959,7 +980,7 @@ class HeliosCompassCard extends HTMLElement {
     const sun = this._sunNow();
     const src = this._src();
     const power = this._livePower(src);
-    const sig = `${this._sourceId}|${sun.azimuth.toFixed(1)}|${sun.elevation.toFixed(1)}|${power}|`
+    const sig = `${this._showPaths}|${this._sourceId}|${sun.azimuth.toFixed(1)}|${sun.elevation.toFixed(1)}|${power}|`
       + Object.values(c.corners).map((x) => (x?.entity ? this._hass.states[x.entity]?.state : '')).join('|');
     if (!force && sig === this._sig) return;
     this._sig = sig;
@@ -983,7 +1004,7 @@ class HeliosCompassCard extends HTMLElement {
     const [l2x, l2y] = this._xy(a + 4, R + 13);
     let sunSvg = `<polygon points="${tx.toFixed(1)},${ty.toFixed(1)} ${l1x.toFixed(1)},${l1y.toFixed(1)} ${l2x.toFixed(1)},${l2y.toFixed(1)}" fill="${col}">
       <title>Sonne: Azimut ${a.toFixed(0)}°, Höhe ${sun.elevation.toFixed(0)}°</title></polygon>`;
-    if (c.show_sun_paths && sun.elevation > 0) {
+    if (this._showPaths && sun.elevation > 0) {
       const [sx, sy] = this._xy(a, (1 - sun.elevation / 90) * R);
       sunSvg += `<circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="5" fill="#ffc107" stroke="#fff" stroke-width="1.5"
         filter="drop-shadow(0 0 3px rgba(255,170,0,.9))"><title>Sonne jetzt: Azimut ${a.toFixed(0)}°, Höhe ${sun.elevation.toFixed(0)}°</title></circle>`;
@@ -1006,9 +1027,9 @@ const COLOR = { text: { type: 'color' } };
 
 const LABELS = {
   title: 'Titel (leer = kein Titel)',
-  power_entity: 'PV-Leistungssensor (wenn keine Anlagenliste genutzt wird)',
-  max_power: 'Maximale Leistung (obere Leistungsklasse)',
-  legend_label: 'Beschriftung Farbskala',
+  power_entity: 'PV-Leistungssensor',
+  max_power: 'Max. Leistung',
+  legend_label: 'Text Farbskala',
   metric: 'Standard-Ansicht',
   default_range: 'Standard-Zeitraum',
   ranges: 'Angezeigte Zeitraum-Buttons',
@@ -1044,8 +1065,10 @@ const LABELS = {
   latitude: 'Breitengrad (leer = HA-Standort)',
   longitude: 'Längengrad (leer = HA-Standort)',
   unit_factor: 'Umrechnungsfaktor auf W (leer = automatisch)',
-  kwp: 'Anlagenleistung (kWp, für kWh/kWp)',
+  kwp: 'Anlagenleistung in kWp',
   show_sun_paths: 'Sonnenbahnen einzeichnen',
+  sun_path_toggle: '☀-Knopf in der Karte zum Ein-/Ausblenden der Sonnenbahnen',
+  metrics: 'Angezeigte Ansichten (Umschalter)',
   sun_paths: 'Welche Sonnenbahnen',
   elevation_bands: 'Schatten-Ansicht: Anzahl Höhenringe',
   season_overlay: 'Sommer/Winter: andere Jahreszeit gestrichelt zum Vergleich',
@@ -1058,7 +1081,9 @@ const HELPERS = {
   image_offset_y: 'In % des Kompassradius, damit das Haus genau in der Mitte sitzt.',
   sectors: '36 = 10° breite Sektoren, 16 = eine pro Kompassrichtung',
   elevation_bands: '9 = Ringe à 10° Sonnenhöhe. Für die Schatten-Ansicht am besten „1 Jahr“ wählen.',
-  kwp: 'Leer = Summe der kWp aus den Modulfeldern.',
+  kwp: 'In Kilowatt-Peak: 750 Wp = 0,75 kWp. Leer = Summe der kWp aus den Modulfeldern.',
+  max_power: 'Obergrenze der Leistungsklassen, z. B. 800 W für ein BKW.',
+  metrics: 'Abgewählte Ansichten verschwinden aus dem Umschalter, z. B. „Schatten“.',
   show_sun_paths: 'Heute (mit Uhrzeiten, Auf- und Untergang) sowie 21.6. und 21.12. Abstand zur Mitte = Sonnenhöhe.',
   unit_factor: 'Nur nötig, wenn der Sensor weder W noch kW meldet (z. B. 1000 für kW).',
 };
@@ -1080,9 +1105,13 @@ const SECTIONS = [
         { value: 'shading', label: 'Schatten (Richtung × Sonnenhöhe)' }] } } },
       { name: 'default_range', selector: { select: { mode: 'dropdown', options: RANGE_OPTIONS } } },
     ] },
+    { name: 'metrics', selector: { select: { multiple: true, mode: 'list', options: [
+      { value: 'time', label: 'Zeit' }, { value: 'energy', label: 'Ertrag' }, { value: 'avg_power', label: 'Ø Leistung' },
+      { value: 'shading', label: 'Schatten (Verschattungskarte)' }] } } },
     { name: 'ranges', selector: { select: { multiple: true, mode: 'list', options: RANGE_OPTIONS } } },
     { name: 'season_overlay', selector: { boolean: {} } },
     { name: 'show_sun_paths', selector: { boolean: {} } },
+    { name: 'sun_path_toggle', selector: { boolean: {} } },
     { name: 'sun_paths', selector: { select: { multiple: true, mode: 'list', options: [
       { value: 'today', label: 'Heute' }, { value: 'summer', label: 'Längster Tag (21.6.)' }, { value: 'winter', label: 'Kürzester Tag (21.12.)' }] } } },
     { name: 'sectors', selector: num(8, 72, 4, null, 'slider') },
@@ -1459,10 +1488,15 @@ class HeliosCompassCardEditor extends HTMLElement {
       return this._stopsEditor(body, clone(w.color_stops) || [], () => Number(w.max_power) || DEFAULTS.max_power,
         (stops, st) => { this._set('color_stops', clone(stops)); this._emit(); if (st) this._render(); });
     }
-    const keys = schemaKeys(sec.schema);
+    let schema = sec.schema;
+    if (sec.key === 'general' && (w.sources || []).length) {
+      schema = schema.filter((x) => x.name !== 'power_entity' && x.name !== 'kwp');
+      body.append(this._hint('Mehrere Anlagen sind aktiv: Sensoren und kWp stellst du unter „🔆 Anlagen“ ein. Die maximale Leistung hier gilt für Anlagen ohne eigene Angabe.'));
+    }
+    const keys = schemaKeys(schema);
     const data = {};
     keys.forEach((k) => { data[k] = w[k] ?? FORM_DEFAULTS[k]; });
-    body.append(this._form(sec.schema, data, (v) => {
+    body.append(this._form(schema, data, (v) => {
       keys.forEach((k) => {
         const val = v[k];
         if (!(k in w) && JSON.stringify(val) === JSON.stringify(FORM_DEFAULTS[k])) return; // Standardwerte nicht in YAML schreiben
