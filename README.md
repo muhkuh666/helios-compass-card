@@ -5,7 +5,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
 [![Validate](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml/badge.svg)](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml)
 ![License](https://img.shields.io/github/license/muhkuh666/helios-compass-card)
-![Version](https://img.shields.io/badge/version-1.10.0-orange.svg)
+![Version](https://img.shields.io/badge/version-1.11.0-orange.svg)
 
 **A solar compass for Home Assistant.** This card shows which compass direction your solar system gets its power from. Each sector of the rose is a sun direction. Colors show power classes, and the sector length shows the share of time or yield. An aerial image of your house can sit underneath.
 
@@ -336,6 +336,7 @@ Defaults: top left shows the power of the selected system, top right the sun azi
 | `energy_entity` | – | energy meter in Wh/kWh (single sensor), for measured yield |
 | `kwp` | sum of `modules` | system size in **kWp** for kWh/kWp (single sensor), e.g. 750 Wp = `0.75` |
 | `power_unit` | `auto` | show power in `W`, `kW` or automatically (`auto`, kW from 1000 W) |
+| `power_style` | `both` | “Power” view: `both` (line with dots), `line`, `dots`, `area` (from 7 days: avg and max per direction) or `bars` (peak power per direction) |
 | `energy_display` | `absolute` | “Yield” view: `absolute` (kWh per direction) or `percent` (share in %) |
 | `show_utilization` | `true` | utilization row with % per system and in total |
 | `utilization_base` | `kwp` | utilization relative to `kwp` (without kWp: max. power) or `max_power` |
@@ -462,6 +463,7 @@ mode: single
 
 | Version | Changes |
 |---|---|
+| **1.11.0** | “Power” view as line with dots, line only, dots only, area or bars (`power_style`) |
 | **1.10.0** | New “Power” view: power history as dots/line by sun direction with a dot for the current power, rings in W/kW |
 | **1.9.0** | “Today” period; “Yield” view in kWh per direction (`energy_display`); power unit W/kW selectable (card and per corner); utilization in % per system and in total (row and corner value); sun marker as arrow, circle, sun symbol or dot, at the edge or at sun elevation |
 | **1.8.0** | English translation (card, editor, README); language follows the HA user automatically, option `language`; English compass points (E instead of O) |

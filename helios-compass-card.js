@@ -4,7 +4,7 @@
  *
  * Installation: siehe README.md
  */
-const CARD_VERSION = '1.10.0';
+const CARD_VERSION = '1.11.0';
 
 /* ---------- Sprache / Language ---------- */
 let LANG = 'de';
@@ -163,6 +163,7 @@ const DEFAULTS = {
   sun_marker: 'arrow', // 'arrow' | 'circle' | 'sun' | 'dot' | 'none'
   sun_marker_position: 'edge', // 'edge' | 'elevation'
   sun_marker_color: '#f57c00',
+  power_style: 'both', // Ansicht Leistung: 'both' | 'line' | 'dots' | 'area' | 'bars'
   energy_display: 'absolute', // Ansicht Ertrag: 'absolute' (kWh je Richtung) | 'percent'
   get total_name() { return t('total'); },
   language: 'auto', // 'auto' | 'de' | 'en'
@@ -1041,19 +1042,89 @@ class HeliosCompassCard extends HTMLElement {
       const pos = vis.map((p) => this._xy(p.azimuth, rP(p.v)));
       const maxGap = (r.step || 300) * 1500;
       const fmtT = (ts) => new Date(ts).toLocaleString(LOCALE, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      const style = c.power_style || 'both';
       let lines = '';
       let dots = '';
-      vis.forEach((p, i) => {
-        const [x, y] = pos[i];
-        const col = stops[this._bin(p.v)].color;
-        const prev = vis[i - 1];
-        if (!r.stats && prev && p.t - prev.t <= maxGap) {
-          const [px, py] = pos[i - 1];
-          lines += `<line x1="${px.toFixed(1)}" y1="${py.toFixed(1)}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="${col}" stroke-width="2.6" stroke-linecap="round" opacity=".9"/>`;
+      const tipOf = (p) => `<title>${fmtT(p.t)} – ${fmtPower(p.v)} · ${dir16(p.azimuth)} ${Math.round(p.azimuth)}° · ${t('sun_elevation')} ${Math.round(p.elevation)}°</title>`;
+      const joined = (i) => !r.stats && i > 0 && vis[i].t - vis[i - 1].t <= maxGap;
+      if (style === 'bars') {
+        // Balken je Richtung mit der Höchstleistung
+        const n = c.sectors;
+        const width = 360 / n;
+        const best = new Array(n).fill(null);
+        vis.forEach((p) => {
+          const sec = Math.floor(((p.azimuth + width / 2) % 360) / width) % n;
+          if (!best[sec] || p.v > best[sec].v) best[sec] = p;
+        });
+        const gap = Math.min(1.2, width * 0.12);
+        best.forEach((p, sec) => {
+          if (!p) return;
+          const center = sec * width;
+          lines += `<path class="wedge" d="${arcPath(center - width / 2 + gap / 2, center + width / 2 - gap / 2, 0, rP(p.v))}"
+            fill="${stops[this._bin(p.v)].color}" opacity="${c.sector_opacity}">
+            <title>${t('direction', { deg: Math.round(center), dir: dir16(center) })}: max. ${fmtPower(p.v)} (${fmtT(p.t)})</title></path>`;
+        });
+      } else if (style === 'area') {
+        // Fläche: je zusammenhängendem Abschnitt eine Fläche von der Mitte aus
+        if (r.stats) {
+          // lange Zeiträume: Hülle aus Durchschnitt (Fläche) und Maximum (Linie) je Richtung
+          const n = c.sectors;
+          const width = 360 / n;
+          const acc = Array.from({ length: n }, () => ({ sum: 0, cnt: 0, max: 0 }));
+          vis.forEach((p) => {
+            const sec = Math.floor(((p.azimuth + width / 2) % 360) / width) % n;
+            acc[sec].sum += p.v; acc[sec].cnt += 1; acc[sec].max = Math.max(acc[sec].max, p.v);
+          });
+          const used = acc.map((x, i) => ({ ...x, i })).filter((x) => x.cnt);
+          if (used.length > 1) {
+            const pt = (i, v) => this._xy(i * width, rP(v)).map((q) => q.toFixed(1)).join(',');
+            const avgPeak = Math.max(...used.map((x) => x.sum / x.cnt));
+            lines += `<path d="M0,0 ${used.map((x) => `L${pt(x.i, x.sum / x.cnt)}`).join(' ')} Z" fill="${stops[this._bin(avgPeak)].color}" fill-opacity=".45"
+              stroke="${stops[this._bin(avgPeak)].color}" stroke-width="1.5"/>`;
+            lines += `<polyline points="${used.map((x) => pt(x.i, x.max)).join(' ')}" fill="none" stroke="var(--primary-text-color, #333)"
+              stroke-width="1.2" stroke-dasharray="3 2" opacity=".7"/>`;
+            used.forEach((x) => {
+              const [cx, cy] = this._xy(x.i * width, rP(x.sum / x.cnt));
+              dots += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="1.6" fill="${stops[this._bin(x.sum / x.cnt)].color}" stroke="#fff" stroke-width=".5">
+                <title>${t('direction', { deg: Math.round(x.i * width), dir: dir16(x.i * width) })}: Ø ${fmtPower(x.sum / x.cnt)} · max. ${fmtPower(x.max)}</title></circle>`;
+            });
+          }
         }
-        dots += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.stats ? 2.4 : 1.7}" fill="${col}" stroke="rgba(0,0,0,.35)" stroke-width=".4" opacity="${r.stats ? 0.8 : 1}">
-                   <title>${fmtT(p.t)} – ${fmtPower(p.v)} · ${dir16(p.azimuth)} ${Math.round(p.azimuth)}° · ${t('sun_elevation')} ${Math.round(p.elevation)}°</title></circle>`;
-      });
+        let seg = [];
+        const flush = () => {
+          if (seg.length > 1) {
+            const peak = seg.reduce((m, i) => (vis[i].v > vis[m].v ? i : m), seg[0]);
+            const col = stops[this._bin(vis[peak].v)].color;
+            const d = `M0,0 ${seg.map((i) => `L${pos[i][0].toFixed(1)},${pos[i][1].toFixed(1)}`).join(' ')} Z`;
+            lines += `<path d="${d}" fill="${col}" fill-opacity="${r.stats ? 0.08 : 0.35}" stroke="none"/>`;
+            seg.slice(1).forEach((i) => {
+              const [px, py] = pos[i - 1];
+              const [x, y] = pos[i];
+              lines += `<line x1="${px.toFixed(1)}" y1="${py.toFixed(1)}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="${stops[this._bin(vis[i].v)].color}" stroke-width="1.8" stroke-linecap="round"/>`;
+            });
+          }
+          seg = [];
+        };
+        if (!r.stats) vis.forEach((p, i) => {
+          const newDay = i > 0 && new Date(p.t).toDateString() !== new Date(vis[i - 1].t).toDateString();
+          if (i > 0 && (newDay || p.t - vis[i - 1].t > Math.max(maxGap, 3 * 3600e3))) flush();
+          seg.push(i);
+        });
+        flush();
+      } else {
+        vis.forEach((p, i) => {
+          const [x, y] = pos[i];
+          const col = stops[this._bin(p.v)].color;
+          if (style !== 'dots' && joined(i)) {
+            const [px, py] = pos[i - 1];
+            lines += `<line x1="${px.toFixed(1)}" y1="${py.toFixed(1)}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="${col}" stroke-width="${style === 'line' ? 3 : 2.6}" stroke-linecap="round" opacity=".9">${style === 'line' ? tipOf(p) : ''}</line>`;
+          }
+          const showDot = style === 'dots' || style === 'both' || (style === 'line' && (r.stats || !joined(i)));
+          if (showDot) {
+            dots += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${style === 'dots' ? (r.stats ? 2.4 : 2.2) : r.stats ? 2.4 : 1.7}" fill="${col}" stroke="rgba(0,0,0,.35)" stroke-width=".4" opacity="${r.stats ? 0.8 : 1}">${tipOf(p)}</circle>`;
+          }
+        });
+      }
       this.shadowRoot.querySelector('g.trace').innerHTML = svg + lines + dots;
       if (note) note.textContent = vis.length ? t('note_power') : '';
       this._legendShares(agg, 'time');
@@ -1406,7 +1477,7 @@ const LABELS_EN = {
   language: 'Language',
   power_unit: 'Power unit (W/kW)', show_utilization: 'Utilization row (% per system)', utilization_base: 'Utilization based on',
   sun_marker: 'Sun marker', sun_marker_position: 'Sun marker position', sun_marker_color: 'Sun marker color',
-  energy_display: '“Yield” view shows',
+  energy_display: '“Yield” view shows', power_style: '“Power” view shows',
   title: 'Title (empty = no title)', power_entity: 'PV power sensor', max_power: 'Max. power', legend_label: 'Color scale label',
   metric: 'Default view', default_range: 'Default period', ranges: 'Visible period buttons', sectors: 'Number of direction sectors',
   sector_opacity: 'Sector opacity', show_metric_switch: 'View switch Time / Yield / Avg power', show_stats: 'Key figures', show_legend: 'Color scale',
@@ -1450,7 +1521,7 @@ LABELS = {
   language: 'Sprache',
   power_unit: 'Leistungseinheit (W/kW)', show_utilization: 'Auslastungszeile (% je Anlage)', utilization_base: 'Auslastung bezogen auf',
   sun_marker: 'Sonnenmarker', sun_marker_position: 'Position des Sonnenmarkers', sun_marker_color: 'Farbe des Sonnenmarkers',
-  energy_display: 'Ansicht „Ertrag“ zeigt',
+  energy_display: 'Ansicht „Ertrag“ zeigt', power_style: 'Ansicht „Leistung“ zeigt',
   title: 'Titel (leer = kein Titel)',
   power_entity: 'PV-Leistungssensor',
   max_power: 'Max. Leistung',
@@ -1539,6 +1610,10 @@ SECTIONS = [
       { value: 'time', label: L('Zeit', 'Time') }, { value: 'energy', label: L('Ertrag', 'Yield') }, { value: 'avg_power', label: L('Ø Leistung', 'Avg power') },
       { value: 'shading', label: L('Schatten (Verschattungskarte)', 'Shading (shading map)') }] } } },
     { name: 'ranges', selector: { select: { multiple: true, mode: 'list', options: RANGE_OPTIONS } } },
+    { name: 'power_style', selector: { select: { mode: 'dropdown', options: [
+      { value: 'both', label: L('Linie mit Punkten', 'Line with dots') }, { value: 'line', label: L('Nur Linie', 'Line only') },
+      { value: 'dots', label: L('Nur Punkte', 'Dots only') }, { value: 'area', label: L('Fläche', 'Area') },
+      { value: 'bars', label: L('Balken (Höchstleistung je Richtung)', 'Bars (peak power per direction)') }] } } },
     { name: 'energy_display', selector: { select: { mode: 'dropdown', options: [
       { value: 'absolute', label: L('kWh je Richtung', 'kWh per direction') }, { value: 'percent', label: L('Anteil in %', 'Share in %') }] } } },
     { type: 'grid', name: '', schema: [
