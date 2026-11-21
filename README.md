@@ -6,6 +6,7 @@
 [![Validate](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml/badge.svg)](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml)
 ![License](https://img.shields.io/github/license/muhkuh666/helios-compass-card)
 ![Version](https://img.shields.io/badge/version-1.12.0-orange.svg)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-muhkuh666-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/muhkuh666)
 
 **A solar compass for Home Assistant.** This card shows which compass direction your solar system gets its power from. Each sector of the rose is a sun direction. Colors show power classes, and the sector length shows the share of time or yield. An aerial image of your house can sit underneath.
 
@@ -486,6 +487,16 @@ mode: single
 
 ---
 
+## ☕ Support
+
+If you like the Helios Compass Card, I'd be happy about a coffee:
+
+<a href="https://buymeacoffee.com/muhkuh666"><img src="https://img.buymeacoffee.com/button-api/?text=Buy%20me%20a%20coffee&emoji=%E2%98%95&slug=muhkuh666&button_colour=FFDD00&font_colour=000000&font_family=Cookie&outline_colour=000000&coffee_colour=ffffff" alt="Buy Me a Coffee" height="42"></a>
+
+☕ [Buy Me a Coffee: Muhkuh666](https://buymeacoffee.com/muhkuh666)
+
+---
+
 ## License
 
-[MIT](LICENSE) © muhkuh666
+[MIT](https://raw.githubusercontent.com/muhkuh666/helios-compass-card/v1.12.0/LICENSE) © muhkuh666
