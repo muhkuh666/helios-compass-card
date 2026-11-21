@@ -4,7 +4,7 @@
  *
  * Installation: siehe README.md
  */
-const CARD_VERSION = '1.11.0';
+const CARD_VERSION = '1.11.1';
 
 /* ---------- Sprache / Language ---------- */
 let LANG = 'de';

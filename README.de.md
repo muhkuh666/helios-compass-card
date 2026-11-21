@@ -5,7 +5,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
 [![Validate](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml/badge.svg)](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml)
 ![Lizenz](https://img.shields.io/github/license/muhkuh666/helios-compass-card)
-![Version](https://img.shields.io/badge/version-1.11.0-orange.svg)
+![Version](https://img.shields.io/badge/version-1.11.1-orange.svg)
 
 **PV-Sonnenkompass für Home Assistant.** Die Karte zeigt, aus welcher Himmelsrichtung deine Solaranlage wie viel liefert. Jeder Sektor der Rose steht für eine Sonnenrichtung. Die Farben zeigen die Leistungsklassen, die Länge den Anteil an Zeit oder Ertrag. Darunter liegt auf Wunsch ein Luftbild deines Hauses.
 
@@ -464,6 +464,7 @@ mode: single
 
 | Version | Änderungen |
 |---|---|
+| **1.11.1** | Wartungsversion für die Aufnahme in den HACS-Store (Prüfung vollständig bestanden) |
 | **1.11.0** | Ansicht „Leistung“ wahlweise als Linie mit Punkten, nur Linie, nur Punkte, Fläche oder Balken (`power_style`) |
 | **1.10.0** | Neue Ansicht „Leistung“: Leistungsverlauf als Punkte/Linie nach Sonnenrichtung mit Punkt für die aktuelle Leistung, Ringe in W/kW |
 | **1.9.0** | Zeitraum „Heute“; Ansicht „Ertrag“ in kWh je Richtung (`energy_display`); Leistungseinheit W/kW wählbar (Karte und je Ecke); Auslastung in % je Anlage und gesamt (Zeile und Eckwert); Sonnenmarker als Pfeil, Kreis, Sonnensymbol oder Punkt, am Rand oder auf Sonnenhöhe |
