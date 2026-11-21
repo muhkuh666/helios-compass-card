@@ -1,139 +1,142 @@
 # ☀️ Helios Compass Card
 
+🇬🇧 **English** · 🇩🇪 [Deutsch](README.de.md)
+
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
 [![Validate](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml/badge.svg)](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml)
-![Lizenz](https://img.shields.io/github/license/muhkuh666/helios-compass-card)
-![Version](https://img.shields.io/badge/version-1.7.1-orange.svg)
+![License](https://img.shields.io/github/license/muhkuh666/helios-compass-card)
+![Version](https://img.shields.io/badge/version-1.8.0-orange.svg)
 
-**PV-Sonnenkompass für Home Assistant.** Die Karte zeigt, aus welcher Himmelsrichtung deine Solaranlage wie viel liefert. Jeder Sektor der Rose steht für eine Sonnenrichtung. Die Farben zeigen die Leistungsklassen, die Länge den Anteil an Zeit oder Ertrag. Darunter liegt auf Wunsch ein Luftbild deines Hauses.
+**A solar compass for Home Assistant.** This card shows which compass direction your solar system gets its power from. Each sector of the rose is a sun direction. Colors show power classes, and the sector length shows the share of time or yield. An aerial image of your house can sit underneath.
 
-Geeignet für Balkonkraftwerke, Dachanlagen und beides zusammen.
+Works for balcony solar systems, rooftop systems, or both at once.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/muhkuh666/helios-compass-card/main/images/zeit.png" alt="Ansicht Zeit mit Sonnenbahnen" width="32%">
-  <img src="https://raw.githubusercontent.com/muhkuh666/helios-compass-card/main/images/schatten.png" alt="Ansicht Schatten (Verschattungskarte)" width="32%">
-  <img src="https://raw.githubusercontent.com/muhkuh666/helios-compass-card/main/images/sommer-winter.png" alt="Sommer mit Winter zum Vergleich" width="32%">
+  <img src="https://raw.githubusercontent.com/muhkuh666/helios-compass-card/main/images/en/time.png" alt="Time view with sun paths" width="32%">
+  <img src="https://raw.githubusercontent.com/muhkuh666/helios-compass-card/main/images/en/shading.png" alt="Shading view (shading map)" width="32%">
+  <img src="https://raw.githubusercontent.com/muhkuh666/helios-compass-card/main/images/en/seasons.png" alt="Summer compared with winter" width="32%">
 </p>
-<p align="center"><sub>Links: Ansicht „Zeit“ über 1 Jahr mit Sonnenbahnen · Mitte: Verschattungskarte · Rechts: Sommer mit Winter gestrichelt zum Vergleich</sub></p>
+<p align="center"><sub>Left: “Time” view over 1 year with sun paths · Middle: shading map · Right: summer with winter dashed for comparison</sub></p>
 
-[![In HACS öffnen](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=muhkuh666&repository=helios-compass-card&category=plugin)
+[![Open in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=muhkuh666&repository=helios-compass-card&category=plugin)
 
 ---
 
-## Funktionen
+## Features
 
-- **Solarrose:** 16-teilige Kompassrose (N, NNO, NO … NNW) mit Sektoren nach Sonnenrichtung, gestapelt nach Leistungsklassen.
-- **Vier Ansichten** per Umschalter:
-  - **Zeit:** Wie lange kam die Sonne aus welcher Richtung?
-  - **Ertrag:** Wie viel kWh kamen aus welcher Richtung?
-  - **Ø Leistung:** Durchschnittsleistung je Richtung.
-  - **Schatten:** Verschattungskarte aus Richtung × Sonnenhöhe. Sie zeigt, bei welchem Sonnenstand Bäume oder Nachbarhäuser Schatten werfen.
-- **Sonnenbahnen:** die heutige Bahn mit Uhrzeiten, Auf- und Untergang sowie die Bahnen am längsten (21.6.) und kürzesten Tag (21.12.).
-- **Zeiträume:** 1, 8, 12 und 24 Stunden, 7, 14 und 30 Tage, 1 Jahr, außerdem **Sommer** und **Winter** mit der jeweils anderen Jahreszeit als Vergleich.
-- **Gemessener Ertrag:** Mit einem Energiezähler (kWh) je Anlage sind Ertrag, kWh/kWp und „Ertrag heute“ exakt gemessen statt berechnet.
-- **Ertrag pro kWp:** spezifischer Ertrag je Anlage, z. B. „BKW 1,8 · Dach 1,5 kWh/kWp“ für einen fairen Vergleich.
-- **Mehrere Anlagen:** z. B. BKW, Dach und „Gesamt“ (Summe) per Umschalter in einer Karte.
-- **Kennzahlen:** Ertrag im Zeitraum, Spitzenleistung mit Zeitpunkt und Richtung, beste Richtung.
-- **Modulausrichtung:** gestrichelte Pfeile mit Name und Neigung für jedes Modulfeld.
-- **Hausbild (optional):** drehen, verschieben, skalieren und rund zuschneiden.
-- **Live-Werte:** Sonnenmarker (orange bei Tag, grau bei Nacht), Sonnenazimut, Sonnenhöhe und aktuelle Leistung in den Ecken.
-- **Legende:** Anteil je Leistungsklasse. Die Klasse, in der die aktuelle Leistung liegt, ist umrandet.
-- **Grafischer Editor:** Alle Optionen sind per Klick einstellbar, YAML ist optional.
-- Tooltips beim Überfahren der Sektoren. Ein Klick auf einen Eckwert öffnet die Detailansicht der Entität.
-- Gewählte Anlage, Ansicht und Zeitraum werden je Browser gemerkt.
+- **Solar rose:** a 16-point compass rose (N, NNE, NE … NNW) with sectors by sun direction, stacked by power class.
+- **Four views** you can switch between:
+  - **Time:** how long the sun came from each direction.
+  - **Yield:** how many kWh came from each direction.
+  - **Avg power:** average power per direction.
+  - **Shading:** a shading map of direction × sun elevation. It shows at which sun positions trees or neighboring buildings cast shade.
+- **Sun paths:** today's path with times, sunrise and sunset, plus the paths on the longest day (Jun 21) and the shortest day (Dec 21).
+- **Periods:** 1, 8, 12 and 24 hours, 7, 14 and 30 days, 1 year, plus **Summer** and **Winter**, each compared with the other season.
+- **Measured yield:** add an energy meter (kWh) per system, and yield, kWh/kWp and “Yield today” are measured instead of calculated.
+- **Yield per kWp:** specific yield per system, e.g. “Balcony 1.8 · Roof 1.5 kWh/kWp”, for a fair comparison.
+- **Several systems:** e.g. balcony, roof and “Total” (sum), switchable in one card.
+- **Key figures:** yield for the period, peak power with time and direction, best direction.
+- **Panel orientation:** dashed arrows with name and tilt for each array.
+- **House image (optional):** rotate, move, scale and crop to a circle.
+- **Live values:** sun marker (orange by day, gray at night), sun azimuth, sun elevation and current power in the corners.
+- **Legend:** share per power class. The class of the current power is outlined.
+- **English & German:** the language follows your Home Assistant user automatically (`language: auto | en | de`).
+- **Visual editor:** every option can be set with clicks, YAML is optional.
+- Tooltips when you hover over sectors. Clicking a corner value opens the entity details.
+- The selected system, view and period are remembered per browser.
 
-Den Sonnenstand für den Verlauf berechnet die Karte aus dem Standort deines Home Assistant. Du brauchst nur deinen Leistungssensor.
+The card calculates the sun position for the history from your Home Assistant location. All you need is your power sensor.
 
 ---
 
 ## Installation
 
-### Über HACS (empfohlen)
+### Via HACS (recommended)
 
-1. Klicke oben auf **„In HACS öffnen“**. Alternativ: **HACS → ⋮ → Benutzerdefinierte Repositories**, URL `https://github.com/muhkuh666/helios-compass-card` eintragen und den Typ **Dashboard** wählen.
-2. Suche nach **Helios Compass Card** und wähle **Herunterladen**.
-3. Lade den Browser mit **Strg+F5** neu. In der Companion-App setzt du stattdessen den Frontend-Cache zurück.
+1. Click **“Open in HACS”** above. Alternatively: **HACS → ⋮ → Custom repositories**, enter the URL `https://github.com/muhkuh666/helios-compass-card` and choose the type **Dashboard**.
+2. Search for **Helios Compass Card** and select **Download**.
+3. Reload your browser with **Ctrl+F5**. In the Companion app, reset the frontend cache instead.
 
-HACS trägt die Ressource automatisch ein.
+HACS adds the resource automatically.
 
-### Manuell
+### Manual
 
-1. Kopiere `helios-compass-card.js` nach `/config/www/`.
-2. Öffne **Einstellungen → Dashboards → ⋮ → Ressourcen → Ressource hinzufügen**. URL: `/local/helios-compass-card.js`, Typ: **JavaScript-Modul**.
-3. Lade den Browser mit **Strg+F5** neu.
+1. Copy `helios-compass-card.js` to `/config/www/`.
+2. Go to **Settings → Dashboards → ⋮ → Resources → Add resource**. URL: `/local/helios-compass-card.js`, type: **JavaScript module**.
+3. Reload your browser with **Ctrl+F5**.
 
 ---
 
-## Schnellstart
+## Quick start
 
-Bearbeite das Dashboard, wähle **Karte hinzufügen** und suche nach **„Helios Compass Card“**. Wähle deinen PV-Sensor, fertig.
+Edit your dashboard, choose **Add card** and search for **“Helios Compass Card”**. Pick your PV power sensor and you are done.
 
-Die minimale YAML-Konfiguration:
+Minimal YAML:
 
 ```yaml
 type: custom:helios-compass-card
-power_entity: sensor.pv_leistung
+power_entity: sensor.pv_power
 max_power: 8000
 ```
 
-Für ein Balkonkraftwerk:
+For a balcony system:
 
 ```yaml
 type: custom:helios-compass-card
-title: BKW
-power_entity: sensor.bkw_leistung
+title: Balcony
+power_entity: sensor.balcony_power
 max_power: 800
-legend_label: BKW-Leistung
+legend_label: Balcony power
 ```
 
 ---
 
-## Grafischer Editor
+## Visual editor
 
-Der Editor ist in Abschnitte gegliedert. Die Vorschau aktualisiert sich bei jeder Änderung sofort.
+The editor is split into sections. The preview updates with every change.
 
-| Abschnitt | Inhalt |
+| Section | Contents |
 |---|---|
-| ⚙️ **Allgemein** | Titel, PV-Sensor, maximale Leistung, Beschriftung der Farbskala, kWp |
-| 🧭 **Darstellung** | Standard-Ansicht, Standard-Zeitraum, angezeigte Zeitraum-Buttons, Sommer/Winter-Vergleich, Sonnenbahnen, Anzahl und Deckkraft der Sektoren, Höhenringe der Schatten-Ansicht, Umschalter, Kennzahlen und Farbskala ein/aus |
-| 🏠 **Hausbild** | Bildpfad, Drehung, Verschieben, Größe, Deckkraft, runder Zuschnitt |
-| 🔲 **Werte in den Ecken** | je Ecke: Leistung der gewählten Anlage, beliebige Entität (mit Einheit und Nachkommastellen), Sonnenazimut, Sonnenhöhe oder ausblenden |
-| 🔆 **Anlagen** | mehrere Sensoren mit kWp, eigenen Modulfeldern und Leistungsklassen, Summe „Gesamt“, Standard-Anlage |
-| 📐 **Modulausrichtung** | Modulfelder für alle Anlagen: Name, Farbe, Azimut, Neigung, kWp |
-| 🎨 **Leistungsklassen & Farben** | automatisch oder einzeln bearbeitbar, mit Farbwähler |
-| 🛠️ **Erweitert** | Sonnen-Entität, Stundenwert für 7/14 Tage, Aktualisierung, Standort, Umrechnungsfaktor |
+| ⚙️ **General** | title, PV sensor, maximum power, color scale label, kWp, energy meter |
+| 🧭 **Display** | default view, default period, visible views and period buttons, summer/winter comparison, sun paths, number and opacity of sectors, elevation rings of the shading view, show/hide switch, key figures and color scale |
+| 🏠 **House image** | image path, rotation, offset, size, opacity, circular crop |
+| 🔲 **Corner values** | per corner: power of the selected system, yield today, any entity (with unit and decimals), sun azimuth, sun elevation or hidden |
+| 🔆 **Systems** | several sensors with kWp, energy meters, their own arrays and power classes, sum “Total”, default system |
+| 📐 **Panel orientation** | arrays for all systems: name, color, azimuth, tilt, kWp |
+| 🎨 **Power classes & colors** | automatic, or edit each step with a color picker |
+| 🛠️ **Advanced** | sun entity, hourly value for long periods, refresh interval, location, conversion factor, language |
 
-Listen (Anlagen, Modulfelder, Farbstufen) lassen sich hinzufügen, entfernen und mit ↑ ↓ sortieren. In die YAML schreibt der Editor nur Werte, die vom Standard abweichen.
+You can add, remove and reorder lists (systems, arrays, color steps) with ↑ ↓. The editor only writes values to YAML that differ from the defaults.
 
 ---
 
-## Die vier Ansichten
+## The four views
 
-| Ansicht | Darstellung | Legende | Wofür? |
+| View | Display | Legend | What for? |
 |---|---|---|---|
-| **Zeit** | Anteil der Sonnenzeit aus dieser Richtung | Zeitanteil je Leistungsklasse | Wann steht die Sonne wo, und wie viel kommt dabei an? |
-| **Ertrag** | Anteil am Ertrag (kWh) aus dieser Richtung | Ertragsanteil je Leistungsklasse | Aus welcher Richtung kommt meine Energie? |
-| **Ø Leistung** | Durchschnittsleistung bei Sonne aus dieser Richtung | Zeitanteil je Leistungsklasse | Welche Richtung liefert im Schnitt am meisten? |
-| **Schatten** | Raster aus Richtung × Sonnenhöhe (Rand = Horizont, Mitte = Zenit), Farbe = Ø Leistung | Zeitanteil je Leistungsklasse | Bei welchem Sonnenstand gibt es Schatten? |
+| **Time** | share of sun time from this direction | share of time per power class | Where is the sun when, and how much do you get then? |
+| **Yield** | share of yield (kWh) from this direction | share of yield per power class | Where does your energy come from? |
+| **Avg power** | average power with sun from this direction | share of time per power class | Which direction delivers the most on average? |
+| **Shading** | grid of direction × sun elevation (edge = horizon, center = zenith), color = avg power | share of time per power class | At which sun positions is there shade? |
 
-Gezählt wird nur die Zeit, in der die Sonne über dem Horizont steht.
+Only the time when the sun is above the horizon counts.
 
-**Tipp für die Schatten-Ansicht:** Wähle **1 Jahr**, damit möglichst viele Sonnenstände vorkommen. Ein Bereich, der dunkler ist als seine Nachbarn bei gleicher Höhe, deutet auf Verschattung hin. Typisch sind tief stehende Sonne im Winter und Bäume im Südwesten.
+**Tip for the shading view:** choose **1 year** so that as many sun positions as possible are covered. An area that is darker than its neighbors at the same elevation points to shading. Typical cases are a low winter sun and trees in the southwest.
 
 ---
 
-## Sonnenbahnen
+## Sun paths
 
-Die Karte zeichnet über die Rose:
+The card draws on top of the rose:
 
-- **Heute** (orange): mit Stundenpunkten, Uhrzeiten alle 3 Stunden sowie Auf- ↑ und Untergang ↓ mit Uhrzeit.
-- **21.6.** (gelb, gestrichelt): längster Tag, höchste Sonnenbahn.
-- **21.12.** (blau, gestrichelt): kürzester Tag, niedrigste Sonnenbahn.
-- **Sonne jetzt:** als leuchtender Punkt auf der heutigen Bahn.
+- **Today** (orange): with hour markers, times every 3 hours, and sunrise ↑ and sunset ↓ with times.
+- **Jun 21** (yellow, dashed): longest day, highest sun path.
+- **Dec 21** (blue, dashed): shortest day, lowest sun path.
+- **Sun now:** a glowing dot on today's path.
 
-Bei den Bahnen gilt: Abstand zur Mitte = Sonnenhöhe (Rand = Horizont, Mitte = Zenit). Zusammen mit dem Hausbild siehst du, welche Dachfläche zu welcher Jahreszeit wann Sonne bekommt. Fährst du über eine Bahn, erscheinen Auf- und Untergang, Richtung und Mittagshöhe.
+For the paths, the distance from the center is the sun elevation (edge = horizon, center = zenith). Together with the house image, you can see which roof area gets sun when, in each season. Hover over a path to see sunrise, sunset, direction and maximum elevation.
 
-Mit dem **☀-Knopf** oben rechts blendest du die Bahnen direkt in der Karte ein und aus. Die Wahl wird gemerkt.
+Use the **☀ button** at the top right to show or hide the paths on the card. Your choice is remembered.
 
 ```yaml
 show_sun_paths: true
@@ -141,7 +144,7 @@ sun_path_toggle: true
 sun_paths: [today, summer, winter]
 ```
 
-Die Ansicht **Schatten** (oder jede andere) blendest du über `metrics` aus dem Umschalter aus, im Editor unter 🧭 Darstellung → *Angezeigte Ansichten*:
+You can remove the **Shading** view (or any other) from the switch with `metrics`, in the editor under 🧭 Display → *Visible views*:
 
 ```yaml
 metrics: [time, energy, avg_power]
@@ -149,107 +152,107 @@ metrics: [time, energy, avg_power]
 
 ---
 
-## Lange Zeiträume & Jahreszeiten
+## Long periods & seasons
 
-| Button | Zeitraum |
+| Button | Period |
 |---|---|
-| 30 Tage | die letzten 30 Tage |
-| 1 Jahr | die letzten 365 Tage |
-| Sommer | April bis September der letzten 12 Monate |
-| Winter | Oktober bis März der letzten 12 Monate |
+| 30 days | the last 30 days |
+| 1 year | the last 365 days |
+| Summer | April to September of the last 12 months |
+| Winter | October to March of the last 12 months |
 
-Bei **Sommer** und **Winter** erscheint die jeweils andere Jahreszeit als **gestrichelter Umriss** zum Vergleich (`season_overlay`). Alle Zeiträume ab 7 Tagen nutzen die Langzeitstatistiken, die Home Assistant dauerhaft speichert. 1 Jahr, Sommer und Winter teilen sich dieselben Daten und laden nur einmal.
+With **Summer** and **Winter**, the other season appears as a **dashed outline** for comparison (`season_overlay`). All periods from 7 days use the long-term statistics that Home Assistant keeps permanently. 1 year, Summer and Winter share the same data and load it only once.
 
 ---
 
-## Gemessener Ertrag (Energiezähler)
+## Measured yield (energy meter)
 
-Ohne Energiezähler rechnet die Karte den Ertrag aus dem Leistungsverlauf hoch. Das ist genau genug für die Verteilung nach Richtungen, kann aber vom Zähler des Wechselrichters abweichen. Gibst du je Anlage einen **Energiesensor** an (`energy_entity`), nutzt die Karte die echten Messwerte für:
+Without an energy meter, the card calculates the yield from the power history. That is accurate enough for the distribution by direction, but it can differ from your inverter's meter. If you set an **energy sensor** per system (`energy_entity`), the card uses the real measured values for:
 
-- **Ertrag** in den Kennzahlen. Er heißt dann „Ertrag (gemessen)“.
-- **kWh/kWp** und den Vergleich der Anlagen.
-- den neuen Eckwert **„Ertrag heute“** (`type: energy_today`).
+- **Yield** in the key figures. It is then labeled “Yield (measured)”.
+- **kWh/kWp** and the comparison of systems.
+- the corner value **“Yield today”** (`type: energy_today`).
 
-Geeignet sind Gesamtzähler (z. B. „PV Gesamtertrag“) und täglich zurückgesetzte Zähler (z. B. „PV Tagesertrag“) in Wh, kWh oder MWh. Voraussetzung ist eine Langzeitstatistik, also `state_class: total_increasing` oder `total`. Das ist bei allen Sensoren der Fall, die du im Energie-Dashboard auswählen kannst.
+Suitable sensors are total meters (e.g. “PV total yield”) and meters that reset daily (e.g. “PV daily yield”) in Wh, kWh or MWh. They need long-term statistics, i.e. `state_class: total_increasing` or `total`. That applies to every sensor you can select in the Energy dashboard.
 
 ```yaml
 sources:
-  - name: BKW
-    entity: sensor.bkw_leistung
-    energy_entity: sensor.bkw_ertrag_gesamt
+  - name: Balcony
+    entity: sensor.balcony_power
+    energy_entity: sensor.balcony_energy_total
     kwp: 0.8
-  - name: Dach
-    entity: sensor.dach_leistung
-    energy_entity: sensor.dach_ertrag_gesamt
+  - name: Roof
+    entity: sensor.roof_power
+    energy_entity: sensor.roof_energy_total
     kwp: 6.0
 corners:
   bottom_right: {type: energy_today}
 ```
 
-Bei „Gesamt“ wird der gemessene Ertrag nur genutzt, wenn alle Anlagen einen Energiezähler haben. Die Verteilung auf die Himmelsrichtungen kommt weiterhin aus dem Leistungsverlauf.
+For “Total”, the measured yield is only used if every system has an energy meter. The distribution across directions still comes from the power history.
 
 ---
 
-## Ertrag pro kWp
+## Yield per kWp
 
-Gibst du die Anlagenleistung in kWp an, zeigt die Karte den **spezifischen Ertrag** in kWh/kWp:
+If you enter the system size in kWp, the card shows the **specific yield** in kWh/kWp:
 
-- Bei **Ertrag** steht er unter dem Ertrag der gewählten Anlage.
-- Bei mehreren Anlagen erscheint unter den Kennzahlen ein Vergleich, z. B. *Spezifischer Ertrag (1 Jahr): BKW 980 · Dach 1.050 · Gesamt 1.040 kWh/kWp*.
+- Under **Yield**, it appears below the yield of the selected system.
+- With several systems, a comparison appears below the key figures, e.g. *Specific yield (1 year): Balcony 980 · Roof 1,050 · Total 1,040 kWh/kWp*.
 
 ```yaml
 sources:
-  - {name: BKW, entity: sensor.bkw_leistung, max_power: 800, kwp: 0.8}
-  - {name: Dach, entity: sensor.dach_leistung, max_power: 8000, kwp: 6.0}
+  - {name: Balcony, entity: sensor.balcony_power, max_power: 800, kwp: 0.8}
+  - {name: Roof, entity: sensor.roof_power, max_power: 8000, kwp: 6.0}
 ```
 
-Ohne `kwp` nimmt die Karte die Summe der `kwp`-Angaben aus den Modulfeldern der Anlage. Bei nur einem Sensor gibt es `kwp` auf oberster Ebene.
+Without `kwp`, the card uses the sum of the `kwp` values of the system's arrays. For a single sensor, `kwp` goes at the top level. Note: 750 Wp = `0.75` kWp.
 
 ---
 
-## Mehrere Anlagen
+## Several systems
 
-Statt `power_entity` gibst du eine Liste `sources` an, im Editor unter **🔆 Anlagen**. Über der Rose erscheint dann ein Umschalter, z. B. **BKW | Dach | Gesamt**.
+Instead of `power_entity`, set a list `sources`, in the editor under **🔆 Systems**. A switch then appears above the rose, e.g. **Balcony | Roof | Total**.
 
 ```yaml
 type: custom:helios-compass-card
 title: Helios Compass Card
 sources:
-  - name: BKW
-    entity: sensor.bkw_leistung
+  - name: Balcony
+    entity: sensor.balcony_power
     max_power: 800
     modules:
-      - {name: Balkon, azimuth: 195, tilt: 90}
-  - name: Dach
-    entity: sensor.dach_leistung
+      - {name: Balcony, azimuth: 195, tilt: 90}
+  - name: Roof
+    entity: sensor.roof_power
     max_power: 8000
     modules:
-      - {name: Dach Ost, azimuth: 110, tilt: 35, color: '#e040fb'}
-      - {name: Dach West, azimuth: 290, tilt: 35, color: '#00e5ff'}
+      - {name: Roof east, azimuth: 110, tilt: 35, color: '#e040fb'}
+      - {name: Roof west, azimuth: 290, tilt: 35, color: '#00e5ff'}
 show_total: true
-total_name: Gesamt
+total_name: Total
 default_source: total
 ```
 
-- Jede Anlage hat eine eigene Leistungsskala, eigene Farbstufen und eigene Modulpfeile.
-- **Gesamt** summiert alle Anlagen. Die Skala ergibt sich automatisch aus der Summe der `max_power`, gerundet.
-- Die Ecke oben links (`type: source`) zeigt immer die Leistung der gewählten Anlage, z. B. „BKW-Leistung“, „Dach-Leistung“ oder „Gesamt-Leistung“.
+- Each system has its own power scale, color steps and panel arrows.
+- **Total** adds up all systems. Its scale is the rounded sum of all `max_power` values.
+- The top-left corner (`type: source`) always shows the power of the selected system, e.g. “Balcony power”, “Roof power” or “Total power”.
 
 ---
 
-## Hausbild ausrichten
+## Aligning the house image
 
-Ein Luftbild (Drohne, Satellit, Screenshot aus einer Karten-App) legst du z. B. nach `/config/www/helios/haus.png`. Es ist dann unter `/local/helios/haus.png` erreichbar. Das Bild ist optional, ohne Bild bleibt die Mitte frei.
+Put an aerial image (drone, satellite, screenshot from a map app) at e.g. `/config/www/helios/house.png`. It is then available at `/local/helios/house.png`. The image is optional; without it, the center stays empty.
 
-So richtest du es im Editor unter **🏠 Hausbild** aus:
+Align it in the editor under **🏠 House image**:
 
-1. **Drehung:** So drehen, dass Norden oben ist. In Google Maps ist Norden immer oben, dort siehst du die richtige Lage deines Hauses.
-2. **Verschieben:** Das Haus genau in die Mitte des Kompasses setzen.
-3. **Bildgröße:** passend skalieren.
-4. **Rund zuschneiden:** damit nichts über den Kompass hinausragt.
+1. **Rotation:** rotate until north is up. In Google Maps north is always up, so you can see there how your house is oriented.
+2. **Offset:** move the house to the exact center of the compass.
+3. **Image size:** scale it to fit.
+4. **Crop to circle:** so nothing sticks out of the compass.
 
 ```yaml
-image: /local/helios/haus.png
+image: /local/helios/house.png
 image_rotation: -32.5
 image_offset_x: 4
 image_offset_y: -6
@@ -259,24 +262,24 @@ image_clip: true
 
 ---
 
-## Modulausrichtung
+## Panel orientation
 
 ```yaml
 modules:
-  - name: Balkon
-    azimuth: 195     # 90 = Ost, 180 = Süd, 270 = West
-    tilt: 90         # Neigung in Grad (optional)
-    kwp: 0.8         # optional, erscheint im Tooltip
+  - name: Balcony
+    azimuth: 195     # 90 = east, 180 = south, 270 = west
+    tilt: 90         # tilt in degrees (optional)
+    kwp: 0.8         # optional, shown in the tooltip
     color: '#ff9800' # optional
 ```
 
-Globale `modules` erscheinen bei jeder Anlage. Modulfelder innerhalb einer Anlage erscheinen nur bei dieser Anlage und bei „Gesamt“.
+Global `modules` appear for every system. Arrays inside a system appear only for that system and for “Total”.
 
 ---
 
-## Leistungsklassen & Farben
+## Power classes & colors
 
-Ohne Angabe gibt es 9 Farbstufen von 0 bis `max_power`. Eigene Stufen:
+By default there are 9 color steps from 0 to `max_power`. Custom steps:
 
 ```yaml
 color_stops:
@@ -286,133 +289,134 @@ color_stops:
   - {value: 700, color: '#dc2626'}
 ```
 
-Jede Stufe beginnt bei `value` und reicht bis zur nächsten Stufe. Die letzte Stufe gilt ab ihrem Wert aufwärts.
+Each step starts at `value` and reaches up to the next step. The last step applies from its value upwards.
 
 ---
 
-## Werte in den Ecken
+## Corner values
 
 ```yaml
 corners:
-  top_left:     {type: source}                       # Leistung der gewählten Anlage
-  top_right:    {type: azimuth, name: Sonnenazimut}
-  bottom_left:  {type: elevation, name: Sonnenhöhe}
-  bottom_right: {entity: sensor.tagesertrag, name: Heute, unit: ' kWh', decimals: 2}
+  top_left:     {type: source}                         # power of the selected system
+  top_right:    {type: azimuth, name: Sun azimuth}
+  bottom_left:  {type: elevation, name: Sun elevation}
+  bottom_right: {type: energy_today}                   # yield today (needs energy_entity)
 ```
 
-| Typ | Anzeige |
+| Type | Shows |
 |---|---|
-| `type: source` | Leistung der gewählten Anlage (bei „Gesamt“ die Summe) |
-| `type: energy_today` | Ertrag heute der gewählten Anlage (braucht `energy_entity`) |
-| `entity: …` | beliebige Entität, optional mit `unit` und `decimals` |
-| `type: azimuth` | aktueller Sonnenazimut |
-| `type: elevation` | aktuelle Sonnenhöhe |
-| `null` | Ecke ausblenden |
+| `type: source` | power of the selected system (sum for “Total”) |
+| `type: energy_today` | yield today of the selected system (needs `energy_entity`) |
+| `entity: …` | any entity, optionally with `unit` and `decimals` |
+| `type: azimuth` | current sun azimuth |
+| `type: elevation` | current sun elevation |
+| `null` | hide the corner |
 
-`name` ist immer optional.
+`name` is always optional.
 
-Die Standardbelegung: oben links die Leistung der gewählten Anlage, oben rechts der Sonnenazimut, unten links die Sonnenhöhe, unten rechts leer.
+Defaults: top left shows the power of the selected system, top right the sun azimuth, bottom left the sun elevation, bottom right is empty.
 
 ---
 
-## Alle Optionen
+## All options
 
-### Allgemein & Darstellung
+### General & display
 
-| Option | Standard | Beschreibung |
+| Option | Default | Description |
 |---|---|---|
-| `power_entity` | **Pflicht**¹ | Leistungssensor in W oder kW, wird automatisch umgerechnet |
-| `title` | `Helios Compass Card` | Kartentitel, `""` blendet ihn aus |
-| `max_power` | `8000` | Obergrenze der Leistungsklassen in W, z. B. `800` für ein BKW |
-| `legend_label` | `PV-Leistung` | Beschriftung der Farbskala |
-| `energy_entity` | – | Ertragszähler in Wh/kWh (bei nur einem Sensor), für gemessenen Ertrag |
-| `kwp` | Summe aus `modules` | Anlagenleistung in **kWp** für kWh/kWp (bei nur einem Sensor), z. B. 750 Wp = `0.75` |
-| `metric` | `time` | Standard-Ansicht: `time`, `energy`, `avg_power` oder `shading` |
-| `show_metric_switch` | `true` | Umschalter Zeit / Ertrag / Ø Leistung / Schatten anzeigen |
-| `show_stats` | `true` | Kennzahlen-Zeile anzeigen |
-| `show_legend` | `true` | Farbskala anzeigen |
-| `ranges` | alle | angezeigte Zeitraum-Buttons: `1h`, `8h`, `12h`, `24h`, `7d`, `14d`, `30d`, `1y`, `summer`, `winter` |
-| `season_overlay` | `true` | bei Sommer/Winter die andere Jahreszeit gestrichelt zeigen |
-| `show_sun_paths` | `true` | Sonnenbahnen einzeichnen (Standardzustand) |
-| `sun_path_toggle` | `true` | ☀-Knopf in der Karte zum Ein-/Ausblenden der Sonnenbahnen (wird gemerkt) |
-| `metrics` | alle vier | angezeigte Ansichten im Umschalter: `time`, `energy`, `avg_power`, `shading` |
-| `sun_paths` | `[today, summer, winter]` | welche Bahnen: heute, 21.6., 21.12. |
-| `elevation_bands` | `9` | Schatten-Ansicht: Anzahl Höhenringe (9 = 10°) |
-| `default_range` | `8h` | Start-Zeitraum |
-| `sectors` | `36` | Anzahl Richtungssektoren (36 = 10° breit, 16 = Kompassrichtungen) |
-| `sector_opacity` | `0.8` | Deckkraft der Sektoren |
-| `color_stops` | 9 Stufen bis `max_power` | Liste aus `{value, color}` |
-| `modules` | – | Modulfelder für alle Anlagen |
-| `corners` | siehe oben | Werte in den vier Ecken |
+| `power_entity` | **required**¹ | power sensor in W or kW, converted automatically |
+| `title` | `Helios Compass Card` | card title, `""` hides it |
+| `max_power` | `8000` | upper limit of the power classes in W, e.g. `800` for a balcony system |
+| `legend_label` | `PV power` | color scale label |
+| `energy_entity` | – | energy meter in Wh/kWh (single sensor), for measured yield |
+| `kwp` | sum of `modules` | system size in **kWp** for kWh/kWp (single sensor), e.g. 750 Wp = `0.75` |
+| `metric` | `time` | default view: `time`, `energy`, `avg_power` or `shading` |
+| `show_metric_switch` | `true` | show the view switch |
+| `metrics` | all four | views in the switch: `time`, `energy`, `avg_power`, `shading` |
+| `show_stats` | `true` | show the key figures |
+| `show_legend` | `true` | show the color scale |
+| `ranges` | all | visible period buttons: `1h`, `8h`, `12h`, `24h`, `7d`, `14d`, `30d`, `1y`, `summer`, `winter` |
+| `default_range` | `8h` | initial period |
+| `season_overlay` | `true` | with Summer/Winter, show the other season dashed |
+| `show_sun_paths` | `true` | draw sun paths (initial state) |
+| `sun_path_toggle` | `true` | ☀ button on the card to show/hide sun paths (remembered) |
+| `sun_paths` | `[today, summer, winter]` | which paths: today, Jun 21, Dec 21 |
+| `elevation_bands` | `9` | shading view: number of elevation rings (9 = 10°) |
+| `sectors` | `36` | number of direction sectors (36 = 10° wide, 16 = compass points) |
+| `sector_opacity` | `0.8` | sector opacity |
+| `color_stops` | 9 steps up to `max_power` | list of `{value, color}` |
+| `modules` | – | arrays for all systems |
+| `corners` | see above | values in the four corners |
 
-¹ Entfällt, wenn `sources` genutzt wird.
+¹ Not needed when you use `sources`.
 
-### Hausbild
+### House image
 
-| Option | Standard | Beschreibung |
+| Option | Default | Description |
 |---|---|---|
-| `image` | – | Pfad zum Hausbild (optional) |
-| `image_scale` | `0.8` | Bildgröße relativ zum Kompass |
-| `image_rotation` | `0` | Drehung in Grad, positiv = im Uhrzeigersinn |
-| `image_offset_x` | `0` | Verschieben in % des Kompassradius, + = rechts (Osten) |
-| `image_offset_y` | `0` | Verschieben in % des Kompassradius, + = oben (Norden) |
-| `image_opacity` | `1` | Deckkraft des Bildes |
-| `image_clip` | `false` | Bild rund auf den Kompass zuschneiden |
+| `image` | – | path to the house image (optional) |
+| `image_scale` | `0.8` | image size relative to the compass |
+| `image_rotation` | `0` | rotation in degrees, positive = clockwise |
+| `image_offset_x` | `0` | offset in % of the compass radius, + = right (east) |
+| `image_offset_y` | `0` | offset in % of the compass radius, + = up (north) |
+| `image_opacity` | `1` | image opacity |
+| `image_clip` | `false` | crop the image to the compass circle |
 
-### Mehrere Anlagen
+### Several systems
 
-| Option | Standard | Beschreibung |
+| Option | Default | Description |
 |---|---|---|
-| `sources` | – | Liste der Anlagen, siehe unten |
-| `show_total` | `true` | „Gesamt“ als Summe anzeigen (bei mehreren Anlagen) |
-| `total_name` | `Gesamt` | Bezeichnung der Summe |
-| `total_max_power` | automatisch | Skala für „Gesamt“ |
-| `total_color_stops` | automatisch | Farbstufen für „Gesamt“ |
-| `default_source` | erste Anlage | Start-Anlage: Entität oder `total` |
+| `sources` | – | list of systems, see below |
+| `show_total` | `true` | show “Total” as a sum (with several systems) |
+| `total_name` | `Total` | label of the sum |
+| `total_max_power` | automatic | scale for “Total” |
+| `total_color_stops` | automatic | color steps for “Total” |
+| `default_source` | first system | initial system: entity or `total` |
 
-**Je Anlage in `sources`:**
+**Per system in `sources`:**
 
-| Option | Beschreibung |
+| Option | Description |
 |---|---|
-| `entity` | **Pflicht**, Leistungssensor (W oder kW) |
-| `name` | Name im Umschalter und in der Legende |
-| `max_power` | Obergrenze der Leistungsklassen dieser Anlage |
-| `kwp` | Anlagenleistung in kWp (für kWh/kWp) |
-| `energy_entity` | Ertragszähler dieser Anlage (Wh/kWh) |
-| `color_stops` | eigene Farbstufen |
-| `modules` | eigene Modulfelder |
-| `legend_label` | eigene Beschriftung der Farbskala |
+| `entity` | **required**, power sensor (W or kW) |
+| `name` | name in the switch and the legend |
+| `max_power` | upper limit of this system's power classes |
+| `kwp` | system size in kWp (for kWh/kWp) |
+| `energy_entity` | energy meter of this system (Wh/kWh) |
+| `color_stops` | own color steps |
+| `modules` | own arrays |
+| `legend_label` | own color scale label |
 
-### Erweitert
+### Advanced
 
-| Option | Standard | Beschreibung |
+| Option | Default | Description |
 |---|---|---|
-| `sun_entity` | `sun.sun` | Quelle für den aktuellen Sonnenstand |
-| `stats_type` | `mean` | ab 7 Tagen: Stundenmittel (`mean`) oder Spitze (`max`) |
-| `refresh_interval` | `300` | Verlauf neu laden alle x Sekunden |
-| `latitude` / `longitude` | HA-Standort | Standort überschreiben |
-| `unit_factor` | automatisch | Umrechnungsfaktor auf W, nur nötig bei ungewöhnlichen Einheiten |
+| `sun_entity` | `sun.sun` | source of the current sun position |
+| `stats_type` | `mean` | from 7 days: hourly mean (`mean`) or peak (`max`) |
+| `refresh_interval` | `300` | reload the history every x seconds |
+| `latitude` / `longitude` | HA location | override the location |
+| `language` | `auto` | card language: `auto` (like Home Assistant), `en` or `de` |
+| `unit_factor` | automatic | conversion factor to W, only for unusual units |
 
 ---
 
-## Update-Benachrichtigung
+## Update notifications
 
-Wenn du die Karte über HACS installiert hast, erscheinen neue Versionen automatisch unter **Einstellungen → Updates** und in HACS.
+If you installed the card via HACS, new versions appear automatically under **Settings → Updates** and in HACS.
 
-Optional bekommst du eine Push-Nachricht aufs Handy. Den genauen Namen der Update-Entität findest du unter Einstellungen → Entitäten mit der Suche nach „helios“.
+Optionally, you can get a push notification on your phone. You can find the exact name of the update entity under Settings → Entities by searching for “helios”.
 
 ```yaml
-alias: Helios Compass Card – Update verfügbar
+alias: Helios Compass Card – update available
 triggers:
   - trigger: state
     entity_id: update.helios_compass_card_update
     to: "on"
 actions:
-  - action: notify.mobile_app_DEIN_HANDY
+  - action: notify.mobile_app_YOUR_PHONE
     data:
       title: "☀️ Helios Compass Card"
       message: >
-        Version {{ state_attr('update.helios_compass_card_update', 'latest_version') }} ist verfügbar.
+        Version {{ state_attr('update.helios_compass_card_update', 'latest_version') }} is available.
       data:
         url: /config/updates
         clickAction: /config/updates
@@ -421,47 +425,47 @@ mode: single
 
 ---
 
-## Hinweise & Fehlerbehebung
+## Notes & troubleshooting
 
-- **Hausbild wird nicht angezeigt** (z. B. in der Companion-App):
-  - Verwende einen **relativen Pfad** wie `/local/helios/haus.png`, keine Adresse wie `http://192.168.…` oder `http://homeassistant.local…`. Die App erreicht lokale Adressen unterwegs nicht.
-  - Die Datei muss in `/config/www/` liegen. Hast du den Ordner `www` neu angelegt, starte Home Assistant einmal neu.
-  - Achte auf Groß- und Kleinschreibung: `Haus.PNG` ist nicht dasselbe wie `haus.png`.
-  - Sehr große Fotos (über 2–3 MB) verkleinern, damit sie auf dem Handy schnell laden.
-  - In der App einmal **Einstellungen → Companion App → Fehlerbehebung → Frontend-Cache zurücksetzen**.
-  - Kann die Karte das Bild nicht laden, zeigt sie unten einen Hinweis mit dem Pfad.
-
-- **„Custom element doesn't exist: helios-compass-card“:** Die JS-Datei wurde nicht geladen.
-  - Prüfe, ob `/hacsfiles/helios-compass-card/helios-compass-card.js` im Browser Code anzeigt.
-  - Prüfe, ob die Ressource unter Einstellungen → Dashboards → Ressourcen eingetragen ist.
-  - Lade danach mit Strg+F5 neu.
-- **Zeiträume ab 7 Tagen** nutzen die Langzeitstatistiken. Der Sensor braucht dafür `state_class: measurement`. Fehlen sie, nutzt die Karte den normalen Verlauf, soweit der Recorder so weit zurückreicht.
-- **1 bis 24 Stunden** stammen aus dem Recorder-Verlauf mit 1- bzw. 5-Minuten-Auflösung.
-- Ohne `energy_entity` berechnet die Karte den **Ertrag** aus dem Leistungsverlauf. Er kann daher leicht vom Zählerstand des Wechselrichters abweichen. Mit Energiezähler ist er gemessen.
-- Ab 7 Tagen ist die **Spitze für „Gesamt“** eine obere Abschätzung, weil stündliche Höchstwerte addiert werden.
-- Die Zahlen sind deutsch formatiert. Die Karte unterstützt den hellen und dunklen Modus über die Theme-Farben von Home Assistant.
+- **House image not shown** (e.g. in the Companion app):
+  - Use a **relative path** like `/local/helios/house.png`, not an address like `http://192.168.…` or `http://homeassistant.local…`. The app cannot reach local addresses when you are away.
+  - The file must be in `/config/www/`. If you just created the `www` folder, restart Home Assistant once.
+  - Mind upper and lower case: `House.PNG` is not the same as `house.png`.
+  - Shrink very large photos (over 2–3 MB) so they load quickly on phones.
+  - In the app, go to **Settings → Companion app → Troubleshooting → Reset frontend cache** once.
+  - If the card cannot load the image, it shows a note with the path at the bottom.
+- **“Custom element doesn't exist: helios-compass-card”:** the JS file was not loaded.
+  - Check that `/hacsfiles/helios-compass-card/helios-compass-card.js` shows code in your browser.
+  - Check that the resource is listed under Settings → Dashboards → Resources.
+  - Then reload with Ctrl+F5.
+- **Periods from 7 days** use the long-term statistics. The sensor needs `state_class: measurement` for that. Without them, the card falls back to the regular history, as far back as the recorder keeps it.
+- **1 to 24 hours** come from the recorder history at 1- or 5-minute resolution.
+- Without `energy_entity`, the card calculates the **yield** from the power history, so it can differ slightly from your inverter's meter. With an energy meter it is measured.
+- From 7 days, the **peak for “Total”** is an upper estimate, because hourly maximums are added up.
+- Numbers, dates and times follow the selected language. The card supports light and dark mode via the Home Assistant theme colors.
 
 ---
 
 ## Changelog
 
-| Version | Änderungen |
+| Version | Changes |
 |---|---|
-| **1.7.1** | Hausbild als HTML-Ebene statt SVG, dadurch zuverlässig auch in der Companion-App (iOS/Android); Hinweis, wenn das Bild nicht geladen werden kann |
-| **1.7.0** | Energiezähler je Anlage (`energy_entity`): gemessener Ertrag und kWh/kWp; neuer Eckwert „Ertrag heute“ (`type: energy_today`) |
-| **1.6.1** | ☀-Knopf zum Ein-/Ausblenden der Sonnenbahnen; Ansichten im Umschalter wählbar (z. B. ohne „Schatten“); Editor blendet Einzel-Sensor aus, wenn Anlagen angelegt sind; kürzere Feldbezeichnungen |
-| **1.6.0** | Sonnenbahnen (heute mit Auf-/Untergang, 21.6., 21.12.); Ansicht „Schatten“ (Richtung × Sonnenhöhe); Zeiträume 30 Tage, 1 Jahr, Sommer, Winter mit Vergleich; kWp je Anlage und spezifischer Ertrag kWh/kWp |
-| **1.5.1** | Die Ecke oben links folgt bei mehreren Anlagen automatisch der Auswahl, auch bei älteren Konfigurationen |
-| **1.5.0** | Grafischer Editor für alle Optionen: Listen für Anlagen, Modulfelder und Farbstufen mit Farbwähler; Ecken mit Einheit und Nachkommastellen |
-| **1.4.0** | Hausbild verschieben und rund zuschneiden, feinere Drehung; Zeitraum 12 Std.; Name „Helios Compass Card“ |
-| **1.3.0** | Mehrere Anlagen mit Umschalter und Summe „Gesamt“; Anzeige in kW ab 1000 W |
-| **1.2.1** | Ringbeschriftung passt sich ohne Hausbild an |
-| **1.2.0** | Ansichten Zeit / Ertrag / Ø Leistung, Kennzahlen, Modulausrichtung, erster grafischer Editor |
-| **1.1.0** | Solarrose mit Sektoren statt Punkten |
-| **1.0.0** | Erste Version |
+| **1.8.0** | English translation (card, editor, README); language follows the HA user automatically, option `language`; English compass points (E instead of O) |
+| **1.7.1** | House image as an HTML layer instead of SVG, so it works reliably in the Companion app (iOS/Android); note when the image cannot be loaded |
+| **1.7.0** | Energy meter per system (`energy_entity`): measured yield and kWh/kWp; new corner value “Yield today” (`type: energy_today`) |
+| **1.6.1** | ☀ button to show/hide sun paths; selectable views in the switch (e.g. without “Shading”); editor hides the single sensor when systems are set; shorter field labels |
+| **1.6.0** | Sun paths (today with sunrise/sunset, Jun 21, Dec 21); “Shading” view (direction × sun elevation); periods 30 days, 1 year, Summer, Winter with comparison; kWp per system and specific yield kWh/kWp |
+| **1.5.1** | With several systems, the top-left corner follows the selection automatically, also for older configurations |
+| **1.5.0** | Visual editor for all options: lists for systems, arrays and color steps with a color picker; corners with unit and decimals |
+| **1.4.0** | Move and crop the house image, finer rotation; 12 h period; name “Helios Compass Card” |
+| **1.3.0** | Several systems with a switch and sum “Total”; kW display from 1000 W |
+| **1.2.1** | Ring labels adapt when there is no house image |
+| **1.2.0** | Views Time / Yield / Avg power, key figures, panel orientation, first visual editor |
+| **1.1.0** | Solar rose with sectors instead of dots |
+| **1.0.0** | First version |
 
 ---
 
-## Lizenz
+## License
 
 [MIT](LICENSE) © muhkuh666
