@@ -5,7 +5,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
 [![Validate](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml/badge.svg)](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml)
 ![Lizenz](https://img.shields.io/github/license/muhkuh666/helios-compass-card)
-![Version](https://img.shields.io/badge/version-1.11.1-orange.svg)
+![Version](https://img.shields.io/badge/version-1.12.0-orange.svg)
 
 **PV-Sonnenkompass für Home Assistant.** Die Karte zeigt, aus welcher Himmelsrichtung deine Solaranlage wie viel liefert. Jeder Sektor der Rose steht für eine Sonnenrichtung. Die Farben zeigen die Leistungsklassen, die Länge den Anteil an Zeit oder Ertrag. Darunter liegt auf Wunsch ein Luftbild deines Hauses.
 
@@ -340,7 +340,9 @@ Die Standardbelegung: oben links die Leistung der gewählten Anlage, oben rechts
 | `energy_display` | `absolute` | Ansicht „Ertrag“: `absolute` (kWh je Richtung) oder `percent` (Anteil in %) |
 | `show_utilization` | `true` | Auslastungszeile mit % je Anlage und gesamt |
 | `utilization_base` | `kwp` | Auslastung bezogen auf `kwp` (ohne kWp: max. Leistung) oder `max_power` |
-| `sun_marker` | `arrow` | Sonnenmarker: `arrow`, `circle`, `sun`, `dot` oder `none` |
+| `sun_marker` | `arrow` | Sonnenmarker: `arrow` (nach innen), `arrow_out` (nach außen), `circle`, `sun`, `dot` oder `none` |
+| `compass_style` | `color` | Himmelsrichtungen farbig (`color`) oder schwarz/grau (`mono`) |
+| `show_range_buttons` | `true` | Zeitraum-Buttons anzeigen (aus = kompakte Ansicht mit `default_range`) |
 | `sun_marker_position` | `edge` | `edge` (am Rand) oder `elevation` (auf Sonnenhöhe) |
 | `sun_marker_color` | `#f57c00` | Farbe des Sonnenmarkers |
 | `metric` | `time` | Standard-Ansicht: `power`, `time`, `energy`, `avg_power` oder `shading` |
@@ -464,6 +466,7 @@ mode: single
 
 | Version | Änderungen |
 |---|---|
+| **1.12.0** | Pfeil nach außen als Sonnenmarker (`arrow_out`); Himmelsrichtungen schwarz/grau (`compass_style: mono`); Zeitraum-Buttons ausblendbar (`show_range_buttons`) |
 | **1.11.1** | Wartungsversion für die Aufnahme in den HACS-Store (Prüfung vollständig bestanden) |
 | **1.11.0** | Ansicht „Leistung“ wahlweise als Linie mit Punkten, nur Linie, nur Punkte, Fläche oder Balken (`power_style`) |
 | **1.10.0** | Neue Ansicht „Leistung“: Leistungsverlauf als Punkte/Linie nach Sonnenrichtung mit Punkt für die aktuelle Leistung, Ringe in W/kW |

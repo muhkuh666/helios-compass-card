@@ -5,7 +5,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
 [![Validate](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml/badge.svg)](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml)
 ![License](https://img.shields.io/github/license/muhkuh666/helios-compass-card)
-![Version](https://img.shields.io/badge/version-1.11.1-orange.svg)
+![Version](https://img.shields.io/badge/version-1.12.0-orange.svg)
 
 **A solar compass for Home Assistant.** This card shows which compass direction your solar system gets its power from. Each sector of the rose is a sun direction. Colors show power classes, and the sector length shows the share of time or yield. An aerial image of your house can sit underneath.
 
@@ -340,7 +340,9 @@ Defaults: top left shows the power of the selected system, top right the sun azi
 | `energy_display` | `absolute` | “Yield” view: `absolute` (kWh per direction) or `percent` (share in %) |
 | `show_utilization` | `true` | utilization row with % per system and in total |
 | `utilization_base` | `kwp` | utilization relative to `kwp` (without kWp: max. power) or `max_power` |
-| `sun_marker` | `arrow` | sun marker: `arrow`, `circle`, `sun`, `dot` or `none` |
+| `sun_marker` | `arrow` | sun marker: `arrow` (inward), `arrow_out` (outward), `circle`, `sun`, `dot` or `none` |
+| `compass_style` | `color` | compass labels colored (`color`) or black/gray (`mono`) |
+| `show_range_buttons` | `true` | show period buttons (off = compact view using `default_range`) |
 | `sun_marker_position` | `edge` | `edge` or `elevation` (at sun elevation) |
 | `sun_marker_color` | `#f57c00` | sun marker color |
 | `metric` | `time` | default view: `power`, `time`, `energy`, `avg_power` or `shading` |
@@ -463,6 +465,7 @@ mode: single
 
 | Version | Changes |
 |---|---|
+| **1.12.0** | Outward arrow as sun marker (`arrow_out`); black/gray compass labels (`compass_style: mono`); period buttons can be hidden (`show_range_buttons`) |
 | **1.11.1** | Maintenance release for inclusion in the HACS store (all checks passed) |
 | **1.11.0** | “Power” view as line with dots, line only, dots only, area or bars (`power_style`) |
 | **1.10.0** | New “Power” view: power history as dots/line by sun direction with a dot for the current power, rings in W/kW |
