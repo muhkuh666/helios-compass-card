@@ -5,7 +5,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
 [![Validate](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml/badge.svg)](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml)
 ![Lizenz](https://img.shields.io/github/license/muhkuh666/helios-compass-card)
-![Version](https://img.shields.io/badge/version-1.8.0-orange.svg)
+![Version](https://img.shields.io/badge/version-1.9.0-orange.svg)
 
 **PV-Sonnenkompass für Home Assistant.** Die Karte zeigt, aus welcher Himmelsrichtung deine Solaranlage wie viel liefert. Jeder Sektor der Rose steht für eine Sonnenrichtung. Die Farben zeigen die Leistungsklassen, die Länge den Anteil an Zeit oder Ertrag. Darunter liegt auf Wunsch ein Luftbild deines Hauses.
 
@@ -31,14 +31,16 @@ Geeignet für Balkonkraftwerke, Dachanlagen und beides zusammen.
   - **Ø Leistung:** Durchschnittsleistung je Richtung.
   - **Schatten:** Verschattungskarte aus Richtung × Sonnenhöhe. Sie zeigt, bei welchem Sonnenstand Bäume oder Nachbarhäuser Schatten werfen.
 - **Sonnenbahnen:** die heutige Bahn mit Uhrzeiten, Auf- und Untergang sowie die Bahnen am längsten (21.6.) und kürzesten Tag (21.12.).
-- **Zeiträume:** 1, 8, 12 und 24 Stunden, 7, 14 und 30 Tage, 1 Jahr, außerdem **Sommer** und **Winter** mit der jeweils anderen Jahreszeit als Vergleich.
+- **Zeiträume:** **Heute** (ab Mitternacht), 1, 8, 12 und 24 Stunden, 7, 14 und 30 Tage, 1 Jahr, außerdem **Sommer** und **Winter** mit der jeweils anderen Jahreszeit als Vergleich.
 - **Gemessener Ertrag:** Mit einem Energiezähler (kWh) je Anlage sind Ertrag, kWh/kWp und „Ertrag heute“ exakt gemessen statt berechnet.
 - **Ertrag pro kWp:** spezifischer Ertrag je Anlage, z. B. „BKW 1,8 · Dach 1,5 kWh/kWp“ für einen fairen Vergleich.
 - **Mehrere Anlagen:** z. B. BKW, Dach und „Gesamt“ (Summe) per Umschalter in einer Karte.
+- **Ertrag je Richtung in kWh:** Die Ansicht „Ertrag“ zeigt, wie viele kWh aus welcher Richtung kamen, z. B. für heute. Mit Energiezähler ist die Summe gemessen.
+- **Auslastung in %:** je Anlage und gesamt, als Zeile mit Balken und als Eckwert.
 - **Kennzahlen:** Ertrag im Zeitraum, Spitzenleistung mit Zeitpunkt und Richtung, beste Richtung.
 - **Modulausrichtung:** gestrichelte Pfeile mit Name und Neigung für jedes Modulfeld.
 - **Hausbild (optional):** drehen, verschieben, skalieren und rund zuschneiden.
-- **Live-Werte:** Sonnenmarker (orange bei Tag, grau bei Nacht), Sonnenazimut, Sonnenhöhe und aktuelle Leistung in den Ecken.
+- **Live-Werte:** Sonnenmarker als Pfeil, Kreis, Sonnensymbol oder Punkt, am Rand oder auf Sonnenhöhe, Sonnenazimut, Sonnenhöhe und aktuelle Leistung in den Ecken.
 - **Legende:** Anteil je Leistungsklasse. Die Klasse, in der die aktuelle Leistung liegt, ist umrandet.
 - **Deutsch & Englisch:** Die Sprache folgt automatisch deinem Home-Assistant-Benutzer (`language: auto | de | en`).
 - **Grafischer Editor:** Alle Optionen sind per Klick einstellbar, YAML ist optional.
@@ -115,7 +117,7 @@ Listen (Anlagen, Modulfelder, Farbstufen) lassen sich hinzufügen, entfernen und
 | Ansicht | Darstellung | Legende | Wofür? |
 |---|---|---|---|
 | **Zeit** | Anteil der Sonnenzeit aus dieser Richtung | Zeitanteil je Leistungsklasse | Wann steht die Sonne wo, und wie viel kommt dabei an? |
-| **Ertrag** | Anteil am Ertrag (kWh) aus dieser Richtung | Ertragsanteil je Leistungsklasse | Aus welcher Richtung kommt meine Energie? |
+| **Ertrag** | kWh aus dieser Richtung (oder Anteil in %, `energy_display`) | Ertragsanteil je Leistungsklasse | Aus welcher Richtung kommt meine Energie, z. B. heute? |
 | **Ø Leistung** | Durchschnittsleistung bei Sonne aus dieser Richtung | Zeitanteil je Leistungsklasse | Welche Richtung liefert im Schnitt am meisten? |
 | **Schatten** | Raster aus Richtung × Sonnenhöhe (Rand = Horizont, Mitte = Zenit), Farbe = Ø Leistung | Zeitanteil je Leistungsklasse | Bei welchem Sonnenstand gibt es Schatten? |
 
@@ -306,13 +308,14 @@ corners:
 | Typ | Anzeige |
 |---|---|
 | `type: source` | Leistung der gewählten Anlage (bei „Gesamt“ die Summe) |
+| `type: utilization` | Auslastung der gewählten Anlage in % |
 | `type: energy_today` | Ertrag heute der gewählten Anlage (braucht `energy_entity`) |
 | `entity: …` | beliebige Entität, optional mit `unit` und `decimals` |
 | `type: azimuth` | aktueller Sonnenazimut |
 | `type: elevation` | aktuelle Sonnenhöhe |
 | `null` | Ecke ausblenden |
 
-`name` ist immer optional.
+`name` ist immer optional. Bei Leistungswerten (`type: source` oder Entitäten in W/kW) legst du mit `power_unit: W` oder `power_unit: kW` die Einheit pro Ecke fest.
 
 Die Standardbelegung: oben links die Leistung der gewählten Anlage, oben rechts der Sonnenazimut, unten links die Sonnenhöhe, unten rechts leer.
 
@@ -330,11 +333,18 @@ Die Standardbelegung: oben links die Leistung der gewählten Anlage, oben rechts
 | `legend_label` | `PV-Leistung` | Beschriftung der Farbskala |
 | `energy_entity` | – | Ertragszähler in Wh/kWh (bei nur einem Sensor), für gemessenen Ertrag |
 | `kwp` | Summe aus `modules` | Anlagenleistung in **kWp** für kWh/kWp (bei nur einem Sensor), z. B. 750 Wp = `0.75` |
+| `power_unit` | `auto` | Leistung anzeigen in `W`, `kW` oder automatisch (`auto`, ab 1000 W in kW) |
+| `energy_display` | `absolute` | Ansicht „Ertrag“: `absolute` (kWh je Richtung) oder `percent` (Anteil in %) |
+| `show_utilization` | `true` | Auslastungszeile mit % je Anlage und gesamt |
+| `utilization_base` | `kwp` | Auslastung bezogen auf `kwp` (ohne kWp: max. Leistung) oder `max_power` |
+| `sun_marker` | `arrow` | Sonnenmarker: `arrow`, `circle`, `sun`, `dot` oder `none` |
+| `sun_marker_position` | `edge` | `edge` (am Rand) oder `elevation` (auf Sonnenhöhe) |
+| `sun_marker_color` | `#f57c00` | Farbe des Sonnenmarkers |
 | `metric` | `time` | Standard-Ansicht: `time`, `energy`, `avg_power` oder `shading` |
 | `show_metric_switch` | `true` | Umschalter Zeit / Ertrag / Ø Leistung / Schatten anzeigen |
 | `show_stats` | `true` | Kennzahlen-Zeile anzeigen |
 | `show_legend` | `true` | Farbskala anzeigen |
-| `ranges` | alle | angezeigte Zeitraum-Buttons: `1h`, `8h`, `12h`, `24h`, `7d`, `14d`, `30d`, `1y`, `summer`, `winter` |
+| `ranges` | alle | angezeigte Zeitraum-Buttons: `today`, `1h`, `8h`, `12h`, `24h`, `7d`, `14d`, `30d`, `1y`, `summer`, `winter` |
 | `season_overlay` | `true` | bei Sommer/Winter die andere Jahreszeit gestrichelt zeigen |
 | `show_sun_paths` | `true` | Sonnenbahnen einzeichnen (Standardzustand) |
 | `sun_path_toggle` | `true` | ☀-Knopf in der Karte zum Ein-/Ausblenden der Sonnenbahnen (wird gemerkt) |
@@ -451,6 +461,7 @@ mode: single
 
 | Version | Änderungen |
 |---|---|
+| **1.9.0** | Zeitraum „Heute“; Ansicht „Ertrag“ in kWh je Richtung (`energy_display`); Leistungseinheit W/kW wählbar (Karte und je Ecke); Auslastung in % je Anlage und gesamt (Zeile und Eckwert); Sonnenmarker als Pfeil, Kreis, Sonnensymbol oder Punkt, am Rand oder auf Sonnenhöhe |
 | **1.8.0** | Englische Übersetzung (Karte, Editor, README); Sprache automatisch nach HA-Benutzer, Option `language`; englische Himmelsrichtungen (E statt O) |
 | **1.7.1** | Hausbild als HTML-Ebene statt SVG, dadurch zuverlässig auch in der Companion-App (iOS/Android); Hinweis, wenn das Bild nicht geladen werden kann |
 | **1.7.0** | Energiezähler je Anlage (`energy_entity`): gemessener Ertrag und kWh/kWp; neuer Eckwert „Ertrag heute“ (`type: energy_today`) |

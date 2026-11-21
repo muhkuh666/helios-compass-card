@@ -5,7 +5,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
 [![Validate](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml/badge.svg)](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml)
 ![License](https://img.shields.io/github/license/muhkuh666/helios-compass-card)
-![Version](https://img.shields.io/badge/version-1.8.0-orange.svg)
+![Version](https://img.shields.io/badge/version-1.9.0-orange.svg)
 
 **A solar compass for Home Assistant.** This card shows which compass direction your solar system gets its power from. Each sector of the rose is a sun direction. Colors show power classes, and the sector length shows the share of time or yield. An aerial image of your house can sit underneath.
 
@@ -31,14 +31,16 @@ Works for balcony solar systems, rooftop systems, or both at once.
   - **Avg power:** average power per direction.
   - **Shading:** a shading map of direction × sun elevation. It shows at which sun positions trees or neighboring buildings cast shade.
 - **Sun paths:** today's path with times, sunrise and sunset, plus the paths on the longest day (Jun 21) and the shortest day (Dec 21).
-- **Periods:** 1, 8, 12 and 24 hours, 7, 14 and 30 days, 1 year, plus **Summer** and **Winter**, each compared with the other season.
+- **Periods:** **Today** (since midnight), 1, 8, 12 and 24 hours, 7, 14 and 30 days, 1 year, plus **Summer** and **Winter**, each compared with the other season.
 - **Measured yield:** add an energy meter (kWh) per system, and yield, kWh/kWp and “Yield today” are measured instead of calculated.
 - **Yield per kWp:** specific yield per system, e.g. “Balcony 1.8 · Roof 1.5 kWh/kWp”, for a fair comparison.
 - **Several systems:** e.g. balcony, roof and “Total” (sum), switchable in one card.
+- **Yield per direction in kWh:** the “Yield” view shows how many kWh came from each direction, e.g. today. With an energy meter, the total is measured.
+- **Utilization in %:** per system and in total, as a row with bars and as a corner value.
 - **Key figures:** yield for the period, peak power with time and direction, best direction.
 - **Panel orientation:** dashed arrows with name and tilt for each array.
 - **House image (optional):** rotate, move, scale and crop to a circle.
-- **Live values:** sun marker (orange by day, gray at night), sun azimuth, sun elevation and current power in the corners.
+- **Live values:** sun marker as arrow, circle, sun symbol or dot, at the edge or at sun elevation, sun azimuth, sun elevation and current power in the corners.
 - **Legend:** share per power class. The class of the current power is outlined.
 - **English & German:** the language follows your Home Assistant user automatically (`language: auto | en | de`).
 - **Visual editor:** every option can be set with clicks, YAML is optional.
@@ -115,7 +117,7 @@ You can add, remove and reorder lists (systems, arrays, color steps) with ↑ �
 | View | Display | Legend | What for? |
 |---|---|---|---|
 | **Time** | share of sun time from this direction | share of time per power class | Where is the sun when, and how much do you get then? |
-| **Yield** | share of yield (kWh) from this direction | share of yield per power class | Where does your energy come from? |
+| **Yield** | kWh from this direction (or share in %, `energy_display`) | share of yield per power class | Where does your energy come from, e.g. today? |
 | **Avg power** | average power with sun from this direction | share of time per power class | Which direction delivers the most on average? |
 | **Shading** | grid of direction × sun elevation (edge = horizon, center = zenith), color = avg power | share of time per power class | At which sun positions is there shade? |
 
@@ -306,13 +308,14 @@ corners:
 | Type | Shows |
 |---|---|
 | `type: source` | power of the selected system (sum for “Total”) |
+| `type: utilization` | utilization of the selected system in % |
 | `type: energy_today` | yield today of the selected system (needs `energy_entity`) |
 | `entity: …` | any entity, optionally with `unit` and `decimals` |
 | `type: azimuth` | current sun azimuth |
 | `type: elevation` | current sun elevation |
 | `null` | hide the corner |
 
-`name` is always optional.
+`name` is always optional. For power values (`type: source` or entities in W/kW), set the unit per corner with `power_unit: W` or `power_unit: kW`.
 
 Defaults: top left shows the power of the selected system, top right the sun azimuth, bottom left the sun elevation, bottom right is empty.
 
@@ -330,12 +333,19 @@ Defaults: top left shows the power of the selected system, top right the sun azi
 | `legend_label` | `PV power` | color scale label |
 | `energy_entity` | – | energy meter in Wh/kWh (single sensor), for measured yield |
 | `kwp` | sum of `modules` | system size in **kWp** for kWh/kWp (single sensor), e.g. 750 Wp = `0.75` |
+| `power_unit` | `auto` | show power in `W`, `kW` or automatically (`auto`, kW from 1000 W) |
+| `energy_display` | `absolute` | “Yield” view: `absolute` (kWh per direction) or `percent` (share in %) |
+| `show_utilization` | `true` | utilization row with % per system and in total |
+| `utilization_base` | `kwp` | utilization relative to `kwp` (without kWp: max. power) or `max_power` |
+| `sun_marker` | `arrow` | sun marker: `arrow`, `circle`, `sun`, `dot` or `none` |
+| `sun_marker_position` | `edge` | `edge` or `elevation` (at sun elevation) |
+| `sun_marker_color` | `#f57c00` | sun marker color |
 | `metric` | `time` | default view: `time`, `energy`, `avg_power` or `shading` |
 | `show_metric_switch` | `true` | show the view switch |
 | `metrics` | all four | views in the switch: `time`, `energy`, `avg_power`, `shading` |
 | `show_stats` | `true` | show the key figures |
 | `show_legend` | `true` | show the color scale |
-| `ranges` | all | visible period buttons: `1h`, `8h`, `12h`, `24h`, `7d`, `14d`, `30d`, `1y`, `summer`, `winter` |
+| `ranges` | all | visible period buttons: `today`, `1h`, `8h`, `12h`, `24h`, `7d`, `14d`, `30d`, `1y`, `summer`, `winter` |
 | `default_range` | `8h` | initial period |
 | `season_overlay` | `true` | with Summer/Winter, show the other season dashed |
 | `show_sun_paths` | `true` | draw sun paths (initial state) |
@@ -450,6 +460,7 @@ mode: single
 
 | Version | Changes |
 |---|---|
+| **1.9.0** | “Today” period; “Yield” view in kWh per direction (`energy_display`); power unit W/kW selectable (card and per corner); utilization in % per system and in total (row and corner value); sun marker as arrow, circle, sun symbol or dot, at the edge or at sun elevation |
 | **1.8.0** | English translation (card, editor, README); language follows the HA user automatically, option `language`; English compass points (E instead of O) |
 | **1.7.1** | House image as an HTML layer instead of SVG, so it works reliably in the Companion app (iOS/Android); note when the image cannot be loaded |
 | **1.7.0** | Energy meter per system (`energy_entity`): measured yield and kWh/kWp; new corner value “Yield today” (`type: energy_today`) |

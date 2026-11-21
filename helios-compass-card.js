@@ -4,7 +4,7 @@
  *
  * Installation: siehe README.md
  */
-const CARD_VERSION = '1.8.0';
+const CARD_VERSION = '1.9.0';
 
 /* ---------- Sprache / Language ---------- */
 let LANG = 'de';
@@ -21,7 +21,7 @@ detectLang();
 
 const I18N = {
   de: {
-    r_1h: '1 Std.', r_8h: '8 Std.', r_12h: '12 Std.', r_24h: '24 Std.', r_7d: '7 Tage', r_14d: '14 Tage', r_30d: '30 Tage',
+    r_today: 'Heute', r_1h: '1 Std.', r_8h: '8 Std.', r_12h: '12 Std.', r_24h: '24 Std.', r_7d: '7 Tage', r_14d: '14 Tage', r_30d: '30 Tage',
     r_1y: '1 Jahr', r_summer: 'Sommer', r_winter: 'Winter', d_summer: 'Apr–Sep', d_winter: 'Okt–Mär',
     m_time: 'Zeit', m_energy: 'Ertrag', m_avg_power: 'Ø Leistung', m_shading: 'Schatten',
     lg_time: 'Zeitanteil je Leistungsklasse (Sonnenzeit)', lg_energy: 'Ertragsanteil je Leistungsklasse',
@@ -47,9 +47,10 @@ const I18N = {
     sun_tip: 'Sonne: Azimut {a}°, Höhe {e}°', sun_now: 'Sonne jetzt: Azimut {a}°, Höhe {e}°',
     array: 'Modulfeld', azimuth: 'Azimut',
     card_desc: 'Sonnenrichtung, PV-Leistung und Ertrag über dem Luftbild des Hauses',
+    utilization: 'Auslastung', util_of: '{name} Auslastung', util_tip: '{p} von {b} ({pct} %)',
   },
   en: {
-    r_1h: '1 h', r_8h: '8 h', r_12h: '12 h', r_24h: '24 h', r_7d: '7 days', r_14d: '14 days', r_30d: '30 days',
+    r_today: 'Today', r_1h: '1 h', r_8h: '8 h', r_12h: '12 h', r_24h: '24 h', r_7d: '7 days', r_14d: '14 days', r_30d: '30 days',
     r_1y: '1 year', r_summer: 'Summer', r_winter: 'Winter', d_summer: 'Apr–Sep', d_winter: 'Oct–Mar',
     m_time: 'Time', m_energy: 'Yield', m_avg_power: 'Avg power', m_shading: 'Shading',
     lg_time: 'Share of sun time per power class', lg_energy: 'Share of yield per power class',
@@ -75,6 +76,7 @@ const I18N = {
     sun_tip: 'Sun: azimuth {a}°, elevation {e}°', sun_now: 'Sun now: azimuth {a}°, elevation {e}°',
     array: 'Array', azimuth: 'Azimuth',
     card_desc: 'Sun direction, PV power and yield over an aerial image of your house',
+    utilization: 'Utilization', util_of: '{name} utilization', util_tip: '{p} of {b} ({pct} %)',
   },
 };
 const t = (k, v = {}) => String(I18N[LANG][k] ?? I18N.de[k] ?? k).replace(/\{(\w+)\}/g, (_, n) => (v[n] ?? ''));
@@ -87,6 +89,12 @@ const dirs = () => DIRS_I18N[LANG];
 const dir16 = (az) => dirs()[Math.round((((az % 360) + 360) % 360) / 22.5) % 16];
 
 const RANGES = {
+  today: {
+    get label() { return t('r_today'); },
+    get hours() { const m = new Date(); m.setHours(0, 0, 0, 0); return Math.max(0.05, (Date.now() - m.getTime()) / 3600e3); },
+    step: 300,
+    today: true,
+  },
   '1h': { get label() { return t('r_1h'); }, hours: 1, step: 60 },
   '8h': { get label() { return t('r_8h'); }, hours: 8, step: 300 },
   '12h': { get label() { return t('r_12h'); }, hours: 12, step: 300 },
@@ -123,7 +131,7 @@ const DEFAULTS = {
   show_stats: true,
   sectors: 36,
   sector_opacity: 0.8,
-  ranges: ['1h', '8h', '12h', '24h', '7d', '14d', '30d', '1y', 'summer', 'winter'],
+  ranges: ['today', '1h', '8h', '12h', '24h', '7d', '14d', '30d', '1y', 'summer', 'winter'],
   default_range: '8h',
   image: null,
   image_scale: 0.8,
@@ -146,6 +154,13 @@ const DEFAULTS = {
   season_overlay: true, // Sommer/Winter: andere Jahreszeit als Umriss
   kwp: null,
   energy_entity: null, // Ertragszähler (kWh) bei nur einem Sensor
+  power_unit: 'auto', // 'auto' | 'W' | 'kW'
+  show_utilization: true, // Auslastung je Anlage in %
+  utilization_base: 'kwp', // 'kwp' (Fallback max_power) | 'max_power'
+  sun_marker: 'arrow', // 'arrow' | 'circle' | 'sun' | 'dot' | 'none'
+  sun_marker_position: 'edge', // 'edge' | 'elevation'
+  sun_marker_color: '#f57c00',
+  energy_display: 'absolute', // Ansicht Ertrag: 'absolute' (kWh je Richtung) | 'percent'
   get total_name() { return t('total'); },
   language: 'auto', // 'auto' | 'de' | 'en'
 };
@@ -208,7 +223,13 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 const fmtNum = (v, dec = 0) => Number(v).toLocaleString(LOCALE, { maximumFractionDigits: dec, minimumFractionDigits: 0 });
 const fmtSpec = (v) => fmtNum(v, v >= 100 ? 0 : v >= 10 ? 1 : 2);
 const fmtPct = (v) => fmtNum(v, v >= 10 ? 0 : 1);
-const fmtPower = (w) => (Math.abs(w) >= 1000 ? `${fmtNum(w / 1000, Math.abs(w) >= 10000 ? 1 : 2)} kW` : `${fmtNum(w)} W`);
+let POWER_UNIT = 'auto'; // 'auto' | 'W' | 'kW'
+function fmtP(w, unit = POWER_UNIT, sep = ' ', dec) {
+  const u = unit === 'W' || unit === 'kW' ? unit : (Math.abs(w) >= 1000 ? 'kW' : 'W');
+  if (u === 'kW') return `${fmtNum(w / 1000, dec ?? (Math.abs(w) >= 10000 ? 1 : Math.abs(w) >= 100 ? 2 : 3))}${sep}kW`;
+  return `${fmtNum(w, dec ?? 0)}${sep}W`;
+}
+const fmtPower = (w) => fmtP(w);
 const fmtEnergy = (wh) => (wh >= 1000 ? `${fmtNum(wh / 1000, wh >= 100000 ? 0 : wh >= 10000 ? 1 : 2)} kWh` : `${fmtNum(wh)} Wh`);
 
 class HeliosCompassCard extends HTMLElement {
@@ -311,6 +332,16 @@ class HeliosCompassCard extends HTMLElement {
 
   _src() { return this._config.sources.find((x) => x.id === this._sourceId) || this._config.sources[0]; }
 
+  _utilBase(src) {
+    if (this._config.utilization_base === 'max_power') return src.max_power;
+    return src.kwp > 0 ? src.kwp * 1000 : src.max_power;
+  }
+
+  _utilization(src = this._src()) {
+    const b = this._utilBase(src);
+    return b > 0 ? (this._livePower(src) / b) * 100 : null;
+  }
+
   _livePower(src = this._src()) {
     return src.entities.reduce((acc, e) => acc + (parseFloat(this._hass.states[e]?.state) || 0) * this._factor(e), 0);
   }
@@ -374,7 +405,7 @@ class HeliosCompassCard extends HTMLElement {
     const end = Date.now();
     const start = end - r.hours * 3600e3;
     const ids = [...new Set(this._config.sources.flatMap((x) => x.entities))];
-    const key = `${r.stats ? 's' : 'h'}${r.hours}`;
+    const key = r.today ? `today-${new Date().toDateString()}-${Math.floor(Date.now() / (this._config.refresh_interval * 1000))}` : `${r.stats ? 's' : 'h'}${r.hours}`;
     const cache = this._cache;
     if (cache && cache.key === key && Date.now() - cache.time < this._config.refresh_interval * 1000) {
       this._data = cache.data;
@@ -594,6 +625,7 @@ class HeliosCompassCard extends HTMLElement {
   /* ---------- Aufbau ---------- */
   _build() {
     const c = this._config;
+    POWER_UNIT = c.power_unit || 'auto';
     const corner = (pos) => (c.corners[pos] ? `<div class="corner ${pos}" data-pos="${pos}"><div class="lbl"></div><div class="val"></div></div>` : '');
     this.shadowRoot.innerHTML = `
       <style>
@@ -614,6 +646,13 @@ class HeliosCompassCard extends HTMLElement {
         .sources button { font: inherit; font-size:.78em; padding:3px 10px; border:0; background:transparent; cursor:pointer;
                  color: var(--primary-text-color); }
         .sources button + button { border-left:1px solid var(--divider-color, #ccc); }
+        .util { display:flex; flex-wrap:wrap; gap:6px; margin:2px 0 4px; }
+        .util .u { position:relative; overflow:hidden; font-size:.74em; padding:2px 8px; border-radius:10px; cursor:pointer;
+                   border:1px solid var(--divider-color, #ccc); color: var(--secondary-text-color); background: var(--card-background-color, #fff); }
+        .util .u i { position:absolute; left:0; top:0; bottom:0; opacity:.22; transition: width .6s; }
+        .util .u span { position:relative; }
+        .util .u b { color: var(--primary-text-color); font-weight:500; }
+        .util .u.active { border-color: var(--primary-color, #03a9f4); }
         .plot { position:relative; width:100%; max-width:420px; margin:0 auto; aspect-ratio: 1 / 1.02; }
         svg.rose { position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
         /* Hausbild als HTML-Ebene unter dem Kompass (funktioniert auch in der Companion-App) */
@@ -650,7 +689,7 @@ class HeliosCompassCard extends HTMLElement {
         .buttons button.active { color:#e53935; border-color:#e53935; }
         .err { font-size:.75em; color: var(--error-color, #db4437); text-align:center; }
         .wedge { transition: opacity .2s; } .wedge:hover { opacity:1 !important; }
-        .buttons.many button { flex: 1 0 calc(20% - 6px); max-width:none; }
+        .buttons.many button { flex: 0 0 calc(20% - 5px); max-width:none; }
         .note { font-size:.72em; color: var(--secondary-text-color); text-align:center; margin-top:4px; min-height:0; }
         .note:empty { display:none; }
         .yield { font-size:.75em; color: var(--secondary-text-color); margin-top:6px; text-align:center; }
@@ -666,6 +705,7 @@ class HeliosCompassCard extends HTMLElement {
           </div>
         </div>` : ''}
         ${c.sources.length > 1 ? `<div class="sources">${c.sources.map((x) => `<button data-src="${esc(x.id)}">${esc(x.name || this._hass?.states[x.entities[0]]?.attributes.friendly_name || x.entities[0])}</button>`).join('')}</div>` : ''}
+        ${c.show_utilization ? '<div class="util"></div>' : ''}
         <div class="plot">
           ${c.image ? '<div class="bgwrap"><img class="bg" alt="" decoding="async"></div>' : ''}
           <svg class="rose" viewBox="-160 -160 320 320" preserveAspectRatio="xMidYMid meet">
@@ -715,7 +755,7 @@ class HeliosCompassCard extends HTMLElement {
     }));
     this.shadowRoot.querySelectorAll('.corner').forEach((el) => el.addEventListener('click', () => {
       const cfg = c.corners[el.dataset.pos];
-      const entityId = cfg?.entity || (cfg?.type === 'source' ? this._src().entities[0]
+      const entityId = cfg?.entity || (['source', 'utilization'].includes(cfg?.type) ? this._src().entities[0]
         : cfg?.type === 'energy_today' ? (this._src().energy[0] || this._src().entities[0]) : cfg?.type ? c.sun_entity : null);
       if (!entityId) return;
       this.dispatchEvent(new CustomEvent('hass-more-info', { detail: { entityId }, bubbles: true, composed: true }));
@@ -955,6 +995,7 @@ class HeliosCompassCard extends HTMLElement {
 
   _renderPlot() {
     if (!this._built) return;
+    POWER_UNIT = this._config.power_unit || 'auto';
     const c = this._config;
     const R = this._R();
     const stops = this._src().color_stops;
@@ -1024,6 +1065,14 @@ class HeliosCompassCard extends HTMLElement {
         return [{ bin: this._bin(avg), value: avg }];
       });
       tip = (sec, part) => t('avg_tip', { p: fmtPower(part.value), pct: fmtPct((agg.cnt[sec] / Math.max(1, agg.totalTime)) * 100) });
+    } else if (metric === 'energy' && c.energy_display !== 'percent') {
+      // absolute kWh je Richtung; mit Energiezähler auf den gemessenen Ertrag skaliert
+      unit = 'Wh';
+      const measured = this._measured(this._src(), r.months);
+      const scale = measured !== null && agg.totalEnergy > 0 ? measured / agg.totalEnergy : 1;
+      stacks = agg.energy.map((row) => row.map((v, bin) => ({ bin, value: v * scale })).filter((x) => x.value > 0));
+      tip = (sec, part) => `${this._binLabel(part.bin)}: ${fmtEnergy(part.value)}`;
+      this._energyScale = scale;
     } else {
       unit = '%';
       const mat = metric === 'energy' ? agg.energy : agg.time;
@@ -1037,6 +1086,7 @@ class HeliosCompassCard extends HTMLElement {
     if (this._compare && this._compare.length) {
       const ca = this._aggregate(this._compare);
       if (metric === 'avg_power') compareTotals = ca.cnt.map((k, i) => (k ? ca.sumV[i] / k : 0));
+      else if (unit === 'Wh') compareTotals = ca.energy.map((row) => row.reduce((x, y) => x + y, 0) * (this._energyScale || 1));
       else {
         const mat = metric === 'energy' ? ca.energy : ca.time;
         const tot = metric === 'energy' ? ca.totalEnergySun : ca.totalTime;
@@ -1057,7 +1107,7 @@ class HeliosCompassCard extends HTMLElement {
       if (i < rings) ringSvg += `<circle r="${rr.toFixed(1)}" fill="none" stroke="${line}" stroke-width=".6"/>`;
       const [x, y] = this._xy(135, rr);
       const val = i * step;
-      const lbl = unit === '%' ? `${fmtNum(val, 1)}%` : fmtPower(val).replace(' ', '');
+      const lbl = unit === '%' ? `${fmtNum(val, 1)}%` : unit === 'Wh' ? fmtEnergy(val).replace(' ', '') : fmtPower(val).replace(' ', '');
       ringSvg += labelSvg(x, y, lbl);
     }
 
@@ -1068,7 +1118,7 @@ class HeliosCompassCard extends HTMLElement {
       const a0 = center - width / 2 + gap / 2;
       const a1 = center + width / 2 - gap / 2;
       const head = t('direction', { deg: Math.round(center), dir: dir16(center) })
-        + (unit === '%' ? `: ${fmtPct(sectorTotals[sec])} % ${metric === 'energy' ? t('of_yield') : t('of_suntime')}` : '');
+        + (unit === '%' ? `: ${fmtPct(sectorTotals[sec])} % ${metric === 'energy' ? t('of_yield') : t('of_suntime')}` : unit === 'Wh' ? `: ${fmtEnergy(sectorTotals[sec])}` : '');
       let acc = 0;
       parts.forEach((part) => {
         const r0 = rOf(acc);
@@ -1089,7 +1139,7 @@ class HeliosCompassCard extends HTMLElement {
         const [x1, y1] = this._xy(center + width / 2, rr);
         outline += `<path d="M${x0.toFixed(2)},${y0.toFixed(2)} A${rr.toFixed(2)},${rr.toFixed(2)} 0 0 1 ${x1.toFixed(2)},${y1.toFixed(2)}"
                       fill="none" stroke="var(--primary-text-color, #222)" stroke-width="1.6" stroke-dasharray="3 2" opacity=".85">
-                      <title>${other.label} (${other.desc}), ${t('direction', { deg: Math.round(center), dir: dir16(center) })}: ${unit === '%' ? `${fmtPct(v)} %` : fmtPower(v)}</title></path>`;
+                      <title>${other.label} (${other.desc}), ${t('direction', { deg: Math.round(center), dir: dir16(center) })}: ${unit === '%' ? `${fmtPct(v)} %` : unit === 'Wh' ? fmtEnergy(v) : fmtPower(v)}</title></path>`;
       });
       if (note) note.textContent = t('note_compare', { a: r.label, ad: r.desc, b: other.label, bd: other.desc });
     }
@@ -1139,7 +1189,7 @@ class HeliosCompassCard extends HTMLElement {
     const r = RANGES[this._range];
     const hasData = this._series.length > 0;
     const src = this._src();
-    const period = r.months ? t('last12', { desc: r.desc }) : t('last', { label: r.label });
+    const period = r.months ? t('last12', { desc: r.desc }) : r.today ? r.label : t('last', { label: r.label });
     const measured = this._measured(src, r.months);
     const total = measured ?? agg.totalEnergy;
     const ok = hasData || measured !== null;
@@ -1181,9 +1231,11 @@ class HeliosCompassCard extends HTMLElement {
     if (!cfg) return '';
     if (cfg.type === 'azimuth') return `${Math.round(sun.azimuth)}°`;
     if (cfg.type === 'elevation') return `${Math.round(sun.elevation)}°`;
-    if (cfg.type === 'source') {
-      const p = this._livePower();
-      return p >= 1000 ? `${fmtNum(p / 1000, p >= 10000 ? 1 : 2)}kW` : `${fmtNum(p)}W`;
+    const pu = cfg.power_unit && cfg.power_unit !== 'auto' ? cfg.power_unit : this._config.power_unit;
+    if (cfg.type === 'source') return fmtP(this._livePower(), pu, '', cfg.decimals);
+    if (cfg.type === 'utilization') {
+      const u = this._utilization();
+      return u === null ? '–' : `${fmtNum(u, cfg.decimals ?? (u < 10 ? 1 : 0))} %`;
     }
     if (cfg.type === 'energy_today') {
       const wh = this._todayEnergy();
@@ -1195,17 +1247,20 @@ class HeliosCompassCard extends HTMLElement {
     const n = parseFloat(st.state);
     if (!isFinite(n)) return st.state;
     const unit = cfg.unit ?? st.attributes.unit_of_measurement ?? '';
-    if (unit === 'W' && Math.abs(n) >= 1000) return `${fmtNum(n / 1000, Math.abs(n) >= 10000 ? 1 : 2)}kW`;
+    const srcUnit = st.attributes.unit_of_measurement;
+    if (!cfg.unit && (srcUnit === 'W' || srcUnit === 'kW')) return fmtP(srcUnit === 'kW' ? n * 1000 : n, pu, '', cfg.decimals);
     const dec = cfg.decimals ?? (Math.abs(n) >= 100 || unit === 'W' ? 0 : 1);
     return `${fmtNum(n, dec)}${unit}`;
   }
 
   _update(force) {
     const c = this._config;
+    POWER_UNIT = c.power_unit || 'auto';
     const sun = this._sunNow();
     const src = this._src();
     const power = this._livePower(src);
-    const sig = `${this._showPaths}|${this._sourceId}|${sun.azimuth.toFixed(1)}|${sun.elevation.toFixed(1)}|${power}|${src.energy.map((e) => this._hass.states[e]?.state).join(',')}|`
+    const allP = c.show_utilization ? c.sources.map((x) => this._livePower(x)).join(',') : '';
+    const sig = `${allP}|${this._showPaths}|${this._sourceId}|${sun.azimuth.toFixed(1)}|${sun.elevation.toFixed(1)}|${power}|${src.energy.map((e) => this._hass.states[e]?.state).join(',')}|`
       + Object.values(c.corners).map((x) => (x?.entity ? this._hass.states[x.entity]?.state : '')).join('|');
     if (!force && sig === this._sig) return;
     this._sig = sig;
@@ -1215,6 +1270,7 @@ class HeliosCompassCard extends HTMLElement {
       let lbl = cfg?.name;
       if (lbl === undefined || lbl === null) {
         if (cfg?.type === 'source') lbl = c.sources.length > 1 && src.name ? t('power_of', { name: src.name }) : t('pv_power');
+        else if (cfg?.type === 'utilization') lbl = c.sources.length > 1 && src.name ? t('util_of', { name: src.name }) : t('utilization');
         else if (cfg?.type === 'energy_today') lbl = c.sources.length > 1 && src.name ? t('today_of', { name: src.name }) : t('yield_today');
         else lbl = cfg?.entity ? this._hass.states[cfg.entity]?.attributes.friendly_name : '';
       }
@@ -1223,16 +1279,41 @@ class HeliosCompassCard extends HTMLElement {
     });
 
     const R = this._R();
-    const col = sun.elevation > 0 ? '#f57c00' : '#9e9e9e';
+    const up = sun.elevation > 0;
+    const col = up ? (c.sun_marker_color || '#f57c00') : '#9e9e9e';
     const a = sun.azimuth;
-    const [tx, ty] = this._xy(a, R + 3);
-    const [l1x, l1y] = this._xy(a - 4, R + 13);
-    const [l2x, l2y] = this._xy(a + 4, R + 13);
-    let sunSvg = `<polygon points="${tx.toFixed(1)},${ty.toFixed(1)} ${l1x.toFixed(1)},${l1y.toFixed(1)} ${l2x.toFixed(1)},${l2y.toFixed(1)}" fill="${col}">
-      <title>${t('sun_tip', { a: a.toFixed(0), e: sun.elevation.toFixed(0) })}</title></polygon>`;
-    if (this._showPaths && sun.elevation > 0) {
+    const atElev = c.sun_marker_position === 'elevation';
+    const rr = atElev ? (1 - Math.max(0, sun.elevation) / 90) * R : R;
+    const tip = `<title>${t(atElev ? 'sun_now' : 'sun_tip', { a: a.toFixed(0), e: sun.elevation.toFixed(0) })}</title>`;
+    const f = (v) => v.toFixed(1);
+    let sunSvg = '';
+    const style = c.sun_marker || 'arrow';
+    if (style === 'arrow') {
+      const r0 = atElev ? rr : R + 3;
+      const [tx, ty] = this._xy(a, r0);
+      const [l1x, l1y] = this._xy(a - (atElev ? 4 * R / Math.max(rr + 10, 20) : 4), r0 + 10);
+      const [l2x, l2y] = this._xy(a + (atElev ? 4 * R / Math.max(rr + 10, 20) : 4), r0 + 10);
+      sunSvg = `<polygon points="${f(tx)},${f(ty)} ${f(l1x)},${f(l1y)} ${f(l2x)},${f(l2y)}" fill="${col}" stroke="#fff" stroke-width="${atElev ? 0.8 : 0}">${tip}</polygon>`;
+    } else if (style !== 'none') {
+      const [x, y] = this._xy(a, atElev ? rr : R + 8);
+      const glow = up ? 'filter="drop-shadow(0 0 3px rgba(255,170,0,.85))"' : '';
+      if (style === 'circle') {
+        sunSvg = `<circle cx="${f(x)}" cy="${f(y)}" r="5.5" fill="${col}" stroke="#fff" stroke-width="1.5" ${glow}>${tip}</circle>`;
+      } else if (style === 'dot') {
+        sunSvg = `<circle cx="${f(x)}" cy="${f(y)}" r="3" fill="${col}" stroke="#fff" stroke-width="1">${tip}</circle>`;
+      } else if (style === 'sun') {
+        let rays = '';
+        for (let i = 0; i < 8; i++) {
+          const ang = (i * Math.PI) / 4;
+          rays += `<line x1="${f(x + Math.cos(ang) * 6.5)}" y1="${f(y + Math.sin(ang) * 6.5)}" x2="${f(x + Math.cos(ang) * 10)}" y2="${f(y + Math.sin(ang) * 10)}"
+                     stroke="${col}" stroke-width="1.6" stroke-linecap="round"/>`;
+        }
+        sunSvg = `<g ${glow}>${tip}${rays}<circle cx="${f(x)}" cy="${f(y)}" r="4.6" fill="${col}" stroke="#fff" stroke-width="1"/></g>`;
+      }
+    }
+    if (this._showPaths && up && !atElev) {
       const [sx, sy] = this._xy(a, (1 - sun.elevation / 90) * R);
-      sunSvg += `<circle cx="${sx.toFixed(1)}" cy="${sy.toFixed(1)}" r="5" fill="#ffc107" stroke="#fff" stroke-width="1.5"
+      sunSvg += `<circle cx="${f(sx)}" cy="${f(sy)}" r="5" fill="#ffc107" stroke="#fff" stroke-width="1.5"
         filter="drop-shadow(0 0 3px rgba(255,170,0,.9))"><title>${t('sun_now', { a: a.toFixed(0), e: sun.elevation.toFixed(0) })}</title></circle>`;
     }
     this.shadowRoot.querySelector('g.sun').innerHTML = sunSvg;
@@ -1240,6 +1321,31 @@ class HeliosCompassCard extends HTMLElement {
 
     const nowBin = this._bin(power);
     this.shadowRoot.querySelectorAll('.bar span').forEach((el) => el.classList.toggle('now', Number(el.dataset.i) === nowBin));
+    this._renderUtil();
+  }
+
+  _renderUtil() {
+    const c = this._config;
+    const el = this.shadowRoot.querySelector('.util');
+    if (!el) return;
+    el.innerHTML = c.sources.map((x) => {
+      const b = this._utilBase(x);
+      const p = this._livePower(x);
+      const u = b > 0 ? (p / b) * 100 : 0;
+      const name = c.sources.length > 1 ? (x.name || x.entities[0]) : t('utilization');
+      const col = x.color_stops[this._bin.call({ _src: () => x }, p)]?.color || 'var(--primary-color)';
+      return `<div class="u${x.id === this._sourceId && c.sources.length > 1 ? ' active' : ''}" data-src="${esc(x.id)}"
+        title="${esc(t('util_tip', { p: fmtP(p), b: fmtP(b), pct: fmtNum(u, 1) }))}">
+        <i style="width:${Math.min(100, Math.max(0, u)).toFixed(1)}%;background:${col}"></i>
+        <span>${c.sources.length > 1 ? `${esc(name)} ` : `${esc(name)} `}<b>${fmtNum(u, u < 10 ? 1 : 0)} %</b></span></div>`;
+    }).join('');
+    el.querySelectorAll('.u').forEach((u) => u.addEventListener('click', () => {
+      if (c.sources.length < 2) return;
+      this._sourceId = u.dataset.src;
+      this._save('source', this._sourceId);
+      this._markButtons();
+      this._switchSource();
+    }));
   }
 }
 
@@ -1252,6 +1358,9 @@ let SOURCE_SCHEMA; let MODULE_SCHEMA; let STOP_SCHEMA; let TOTAL_SCHEMA;
 
 const LABELS_EN = {
   language: 'Language',
+  power_unit: 'Power unit (W/kW)', show_utilization: 'Utilization row (% per system)', utilization_base: 'Utilization based on',
+  sun_marker: 'Sun marker', sun_marker_position: 'Sun marker position', sun_marker_color: 'Sun marker color',
+  energy_display: '“Yield” view shows',
   title: 'Title (empty = no title)', power_entity: 'PV power sensor', max_power: 'Max. power', legend_label: 'Color scale label',
   metric: 'Default view', default_range: 'Default period', ranges: 'Visible period buttons', sectors: 'Number of direction sectors',
   sector_opacity: 'Sector opacity', show_metric_switch: 'View switch Time / Yield / Avg power', show_stats: 'Key figures', show_legend: 'Color scale',
@@ -1279,6 +1388,8 @@ const HELPERS_EN = {
   show_sun_paths: 'Today (with times, sunrise and sunset) plus Jun 21 and Dec 21. Distance from center = sun elevation.',
   unit_factor: 'Only needed if the sensor reports neither W nor kW (e.g. 1000 for kW).',
   language: 'Automatic = language of your Home Assistant user.',
+  utilization_base: 'Current power relative to kWp (falls back to max. power if no kWp is set) or to max. power.',
+  sun_marker_position: '“At sun elevation” places the marker like on the sun paths: edge = horizon, center = zenith.',
 };
 
 function rebuildSchemas() {
@@ -1291,6 +1402,9 @@ const COLOR = { text: { type: 'color' } };
 
 LABELS = {
   language: 'Sprache',
+  power_unit: 'Leistungseinheit (W/kW)', show_utilization: 'Auslastungszeile (% je Anlage)', utilization_base: 'Auslastung bezogen auf',
+  sun_marker: 'Sonnenmarker', sun_marker_position: 'Position des Sonnenmarkers', sun_marker_color: 'Farbe des Sonnenmarkers',
+  energy_display: 'Ansicht „Ertrag“ zeigt',
   title: 'Titel (leer = kein Titel)',
   power_entity: 'PV-Leistungssensor',
   max_power: 'Max. Leistung',
@@ -1377,6 +1491,23 @@ SECTIONS = [
       { value: 'time', label: L('Zeit', 'Time') }, { value: 'energy', label: L('Ertrag', 'Yield') }, { value: 'avg_power', label: L('Ø Leistung', 'Avg power') },
       { value: 'shading', label: L('Schatten (Verschattungskarte)', 'Shading (shading map)') }] } } },
     { name: 'ranges', selector: { select: { multiple: true, mode: 'list', options: RANGE_OPTIONS } } },
+    { name: 'energy_display', selector: { select: { mode: 'dropdown', options: [
+      { value: 'absolute', label: L('kWh je Richtung', 'kWh per direction') }, { value: 'percent', label: L('Anteil in %', 'Share in %') }] } } },
+    { type: 'grid', name: '', schema: [
+      { name: 'power_unit', selector: { select: { mode: 'dropdown', options: [
+        { value: 'auto', label: L('Automatisch (W/kW)', 'Automatic (W/kW)') }, { value: 'W', label: 'W' }, { value: 'kW', label: 'kW' }] } } },
+      { name: 'utilization_base', selector: { select: { mode: 'dropdown', options: [
+        { value: 'kwp', label: 'kWp' }, { value: 'max_power', label: L('Max. Leistung', 'Max. power') }] } } },
+    ] },
+    { name: 'show_utilization', selector: { boolean: {} } },
+    { type: 'grid', name: '', schema: [
+      { name: 'sun_marker', selector: { select: { mode: 'dropdown', options: [
+        { value: 'arrow', label: L('Pfeil', 'Arrow') }, { value: 'circle', label: L('Kreis', 'Circle') }, { value: 'sun', label: L('Sonnensymbol ☀', 'Sun symbol ☀') },
+        { value: 'dot', label: L('Punkt', 'Dot') }, { value: 'none', label: L('Keiner', 'None') }] } } },
+      { name: 'sun_marker_position', selector: { select: { mode: 'dropdown', options: [
+        { value: 'edge', label: L('Am Rand', 'At the edge') }, { value: 'elevation', label: L('Auf Sonnenhöhe', 'At sun elevation') }] } } },
+    ] },
+    { name: 'sun_marker_color', selector: COLOR },
     { name: 'season_overlay', selector: { boolean: {} } },
     { name: 'show_sun_paths', selector: { boolean: {} } },
     { name: 'sun_path_toggle', selector: { boolean: {} } },
@@ -1421,6 +1552,7 @@ SECTIONS = [
 CORNER_SCHEMA = [
   { name: 'mode', selector: { select: { mode: 'dropdown', options: [
     { value: 'source', label: L('Leistung der gewählten Anlage', 'Power of the selected system') }, { value: 'energy_today', label: L('Ertrag heute der gewählten Anlage', 'Yield today of the selected system') },
+    { value: 'utilization', label: L('Auslastung der gewählten Anlage (%)', 'Utilization of the selected system (%)') },
     { value: 'entity', label: L('Beliebige Entität', 'Any entity') },
     { value: 'azimuth', label: L('Sonnenazimut', 'Sun azimuth') }, { value: 'elevation', label: L('Sonnenhöhe', 'Sun elevation') }, { value: 'none', label: L('Ausblenden', 'Hide') }] } } },
   { name: 'name', selector: { text: {} } },
@@ -1471,7 +1603,12 @@ TOTAL_SCHEMA = [
     LABELS = { ...LABELS, ...LABELS_EN, ...CORNER_POS };
     HELPERS = { ...HELPERS_EN };
   } else {
-    HELPERS = { ...HELPERS, language: 'Automatisch = Sprache deines Home-Assistant-Benutzers.' };
+    HELPERS = {
+      ...HELPERS,
+      language: 'Automatisch = Sprache deines Home-Assistant-Benutzers.',
+      utilization_base: 'Aktuelle Leistung im Verhältnis zu kWp (ohne kWp-Angabe: max. Leistung) oder zur max. Leistung.',
+      sun_marker_position: '„Auf Sonnenhöhe“ setzt den Marker wie bei den Sonnenbahnen: Rand = Horizont, Mitte = Zenit.',
+    };
   }
 }
 rebuildSchemas();
@@ -1680,10 +1817,19 @@ class HeliosCompassCardEditor extends HTMLElement {
         this._set('name', v.name, next);
         write(next);
       }));
+      const puSchema = { name: 'power_unit', selector: { select: { mode: 'dropdown', options: [
+        { value: 'auto', label: L('Wie Karte', 'Like card') }, { value: 'W', label: 'W' }, { value: 'kW', label: 'kW' }] } } };
       if (mode === 'entity') {
-        box.append(this._form(CORNER_ENTITY_SCHEMA, { entity: cc.entity, unit: cc.unit, decimals: cc.decimals }, (v) => {
+        box.append(this._form([...CORNER_ENTITY_SCHEMA, puSchema], { entity: cc.entity, unit: cc.unit, decimals: cc.decimals, power_unit: cc.power_unit || 'auto' }, (v) => {
           const next = { ...{ ...defaultCorners(), ...(w.corners || {}) }[pos] };
           ['entity', 'unit', 'decimals'].forEach((k) => this._set(k, v[k], next));
+          this._set('power_unit', v.power_unit === 'auto' ? undefined : v.power_unit, next);
+          write(next);
+        }));
+      } else if (mode === 'source') {
+        box.append(this._form([puSchema], { power_unit: cc.power_unit || 'auto' }, (v) => {
+          const next = { ...{ ...defaultCorners(), ...(w.corners || {}) }[pos] };
+          this._set('power_unit', v.power_unit === 'auto' ? undefined : v.power_unit, next);
           write(next);
         }));
       }
