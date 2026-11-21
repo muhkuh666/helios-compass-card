@@ -4,7 +4,7 @@
  *
  * Installation: siehe README.md
  */
-const CARD_VERSION = '1.12.0';
+const CARD_VERSION = '1.11.1';
 
 /* ---------- Sprache / Language ---------- */
 let LANG = 'de';
@@ -163,8 +163,6 @@ const DEFAULTS = {
   sun_marker: 'arrow', // 'arrow' | 'circle' | 'sun' | 'dot' | 'none'
   sun_marker_position: 'edge', // 'edge' | 'elevation'
   sun_marker_color: '#f57c00',
-  compass_style: 'color', // Himmelsrichtungen: 'color' | 'mono'
-  show_range_buttons: true,
   power_style: 'both', // Ansicht Leistung: 'both' | 'line' | 'dots' | 'area' | 'bars'
   energy_display: 'absolute', // Ansicht Ertrag: 'absolute' (kWh je Richtung) | 'percent'
   get total_name() { return t('total'); },
@@ -726,7 +724,7 @@ class HeliosCompassCard extends HTMLElement {
           <div class="stat" data-s="peak"><div class="k">${t('st_peak')}</div><div class="v">–</div><div class="s">&nbsp;</div></div>
           <div class="stat" data-s="best"><div class="k">${t('st_best')}</div><div class="v">–</div><div class="s">&nbsp;</div></div>
         </div><div class="yield"></div>` : ''}
-        <div class="buttons${c.ranges.length > 6 ? ' many' : ''}"${c.show_range_buttons === false ? ' style="display:none"' : ''}>${c.ranges.map((r) => `<button data-r="${r}">${RANGES[r].label}</button>`).join('')}</div>
+        <div class="buttons${c.ranges.length > 6 ? ' many' : ''}">${c.ranges.map((r) => `<button data-r="${r}">${RANGES[r].label}</button>`).join('')}</div>
         <div class="err"></div>
       </ha-card>`;
 
@@ -823,10 +821,8 @@ class HeliosCompassCard extends HTMLElement {
       const main = i % 4 === 0;
       const mid = i % 2 === 0 && !main;
       const [x, y] = this._xy(i * 22.5, R + (main ? 22 : 16));
-      const mono = c.compass_style === 'mono';
-      const fill = mono ? (main || mid ? 'var(--primary-text-color, #222)' : 'var(--secondary-text-color, #666)')
-        : main ? '#f5b400' : mid ? '#2fa3c4' : 'var(--secondary-text-color, #999)';
-      const size = main ? 15 : mid ? (mono ? 11 : 10) : 7;
+      const fill = main ? '#f5b400' : mid ? '#2fa3c4' : 'var(--secondary-text-color, #999)';
+      const size = main ? 15 : mid ? 10 : 7;
       s += `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" font-size="${size}" fill="${fill}" text-anchor="middle"
               dominant-baseline="central" font-family="inherit">${d}</text>`;
     });
@@ -1403,14 +1399,7 @@ class HeliosCompassCard extends HTMLElement {
     const f = (v) => v.toFixed(1);
     let sunSvg = '';
     const style = c.sun_marker || 'arrow';
-    if (style === 'arrow_out') {
-      // Pfeil außen am Ring, Spitze zeigt nach außen
-      const r0 = atElev ? rr : R + 2;
-      const [tx, ty] = this._xy(a, r0 + 11);
-      const [l1x, l1y] = this._xy(a - (atElev ? 4 * R / Math.max(rr + 10, 20) : 4.2), r0);
-      const [l2x, l2y] = this._xy(a + (atElev ? 4 * R / Math.max(rr + 10, 20) : 4.2), r0);
-      sunSvg = `<polygon points="${f(tx)},${f(ty)} ${f(l1x)},${f(l1y)} ${f(l2x)},${f(l2y)}" fill="${col}">${tip}</polygon>`;
-    } else if (style === 'arrow') {
+    if (style === 'arrow') {
       const r0 = atElev ? rr : R + 3;
       const [tx, ty] = this._xy(a, r0);
       const [l1x, l1y] = this._xy(a - (atElev ? 4 * R / Math.max(rr + 10, 20) : 4), r0 + 10);
@@ -1488,7 +1477,7 @@ const LABELS_EN = {
   language: 'Language',
   power_unit: 'Power unit (W/kW)', show_utilization: 'Utilization row (% per system)', utilization_base: 'Utilization based on',
   sun_marker: 'Sun marker', sun_marker_position: 'Sun marker position', sun_marker_color: 'Sun marker color',
-  energy_display: '“Yield” view shows', power_style: '“Power” view shows', compass_style: 'Compass labels', show_range_buttons: 'Period buttons',
+  energy_display: '“Yield” view shows', power_style: '“Power” view shows',
   title: 'Title (empty = no title)', power_entity: 'PV power sensor', max_power: 'Max. power', legend_label: 'Color scale label',
   metric: 'Default view', default_range: 'Default period', ranges: 'Visible period buttons', sectors: 'Number of direction sectors',
   sector_opacity: 'Sector opacity', show_metric_switch: 'View switch Time / Yield / Avg power', show_stats: 'Key figures', show_legend: 'Color scale',
@@ -1532,7 +1521,7 @@ LABELS = {
   language: 'Sprache',
   power_unit: 'Leistungseinheit (W/kW)', show_utilization: 'Auslastungszeile (% je Anlage)', utilization_base: 'Auslastung bezogen auf',
   sun_marker: 'Sonnenmarker', sun_marker_position: 'Position des Sonnenmarkers', sun_marker_color: 'Farbe des Sonnenmarkers',
-  energy_display: 'Ansicht „Ertrag“ zeigt', power_style: 'Ansicht „Leistung“ zeigt', compass_style: 'Himmelsrichtungen', show_range_buttons: 'Zeitraum-Buttons',
+  energy_display: 'Ansicht „Ertrag“ zeigt', power_style: 'Ansicht „Leistung“ zeigt',
   title: 'Titel (leer = kein Titel)',
   power_entity: 'PV-Leistungssensor',
   max_power: 'Max. Leistung',
@@ -1636,17 +1625,12 @@ SECTIONS = [
     { name: 'show_utilization', selector: { boolean: {} } },
     { type: 'grid', name: '', schema: [
       { name: 'sun_marker', selector: { select: { mode: 'dropdown', options: [
-        { value: 'arrow', label: L('Pfeil nach innen', 'Arrow inward') }, { value: 'arrow_out', label: L('Pfeil nach außen', 'Arrow outward') }, { value: 'circle', label: L('Kreis', 'Circle') }, { value: 'sun', label: L('Sonnensymbol ☀', 'Sun symbol ☀') },
+        { value: 'arrow', label: L('Pfeil', 'Arrow') }, { value: 'circle', label: L('Kreis', 'Circle') }, { value: 'sun', label: L('Sonnensymbol ☀', 'Sun symbol ☀') },
         { value: 'dot', label: L('Punkt', 'Dot') }, { value: 'none', label: L('Keiner', 'None') }] } } },
       { name: 'sun_marker_position', selector: { select: { mode: 'dropdown', options: [
         { value: 'edge', label: L('Am Rand', 'At the edge') }, { value: 'elevation', label: L('Auf Sonnenhöhe', 'At sun elevation') }] } } },
     ] },
     { name: 'sun_marker_color', selector: COLOR },
-    { type: 'grid', name: '', schema: [
-      { name: 'compass_style', selector: { select: { mode: 'dropdown', options: [
-        { value: 'color', label: L('Farbig', 'Colored') }, { value: 'mono', label: L('Schwarz/Grau', 'Black/gray') }] } } },
-      { name: 'show_range_buttons', selector: { boolean: {} } },
-    ] },
     { name: 'season_overlay', selector: { boolean: {} } },
     { name: 'show_sun_paths', selector: { boolean: {} } },
     { name: 'sun_path_toggle', selector: { boolean: {} } },
