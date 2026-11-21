@@ -5,7 +5,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
 [![Validate](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml/badge.svg)](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml)
 ![Lizenz](https://img.shields.io/github/license/muhkuh666/helios-compass-card)
-![Version](https://img.shields.io/badge/version-1.11.1-orange.svg)
+![Version](https://img.shields.io/badge/version-1.12.0-orange.svg)
 
 **PV-Sonnenkompass für Home Assistant.** Die Karte zeigt, aus welcher Himmelsrichtung deine Solaranlage wie viel liefert. Jeder Sektor der Rose steht für eine Sonnenrichtung. Die Farben zeigen die Leistungsklassen, die Länge den Anteil an Zeit oder Ertrag. Darunter liegt auf Wunsch ein Luftbild deines Hauses.
 
@@ -337,6 +337,8 @@ Die Standardbelegung: oben links die Leistung der gewählten Anlage, oben rechts
 | `kwp` | Summe aus `modules` | Anlagenleistung in **kWp** für kWh/kWp (bei nur einem Sensor), z. B. 750 Wp = `0.75` |
 | `power_unit` | `auto` | Leistung anzeigen in `W`, `kW` oder automatisch (`auto`, ab 1000 W in kW) |
 | `power_style` | `both` | Ansicht „Leistung“: `both` (Linie mit Punkten), `line`, `dots`, `area` (Fläche; ab 7 Tagen Ø und Maximum je Richtung) oder `bars` (Höchstleistung je Richtung) |
+| `sector_labels` | `false` | Wert an der Spitze jedes Balkens anzeigen (% bei „Zeit“, kWh bei „Ertrag“, W/kW bei „Ø Leistung“ und Leistungs-Balken) |
+| `sector_labels_min` | `20` | nur Balken beschriften, die mindestens x % so groß sind wie der größte |
 | `energy_display` | `absolute` | Ansicht „Ertrag“: `absolute` (kWh je Richtung) oder `percent` (Anteil in %) |
 | `show_utilization` | `true` | Auslastungszeile mit % je Anlage und gesamt |
 | `utilization_base` | `kwp` | Auslastung bezogen auf `kwp` (ohne kWp: max. Leistung) oder `max_power` |
@@ -464,6 +466,7 @@ mode: single
 
 | Version | Änderungen |
 |---|---|
+| **1.12.0** | Werte an den Balkenspitzen einblendbar (`sector_labels`, `sector_labels_min`) |
 | **1.11.1** | Wartungsversion für die Aufnahme in den HACS-Store (Prüfung vollständig bestanden) |
 | **1.11.0** | Ansicht „Leistung“ wahlweise als Linie mit Punkten, nur Linie, nur Punkte, Fläche oder Balken (`power_style`) |
 | **1.10.0** | Neue Ansicht „Leistung“: Leistungsverlauf als Punkte/Linie nach Sonnenrichtung mit Punkt für die aktuelle Leistung, Ringe in W/kW |

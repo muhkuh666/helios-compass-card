@@ -4,7 +4,7 @@
  *
  * Installation: siehe README.md
  */
-const CARD_VERSION = '1.11.1';
+const CARD_VERSION = '1.12.0';
 
 /* ---------- Sprache / Language ---------- */
 let LANG = 'de';
@@ -164,6 +164,8 @@ const DEFAULTS = {
   sun_marker_position: 'edge', // 'edge' | 'elevation'
   sun_marker_color: '#f57c00',
   power_style: 'both', // Ansicht Leistung: 'both' | 'line' | 'dots' | 'area' | 'bars'
+  sector_labels: false, // Werte an den Balkenspitzen anzeigen
+  sector_labels_min: 20, // nur Balken ab x % des größten Balkens beschriften
   energy_display: 'absolute', // Ansicht Ertrag: 'absolute' (kWh je Richtung) | 'percent'
   get total_name() { return t('total'); },
   language: 'auto', // 'auto' | 'de' | 'en'
@@ -1057,9 +1059,13 @@ class HeliosCompassCard extends HTMLElement {
           if (!best[sec] || p.v > best[sec].v) best[sec] = p;
         });
         const gap = Math.min(1.2, width * 0.12);
+        const bestMax = Math.max(0, ...best.filter(Boolean).map((p) => p.v));
         best.forEach((p, sec) => {
           if (!p) return;
           const center = sec * width;
+          if (c.sector_labels && p.v >= bestMax * (Math.max(0, Number(c.sector_labels_min) || 0) / 100)) {
+            dots += this._tipLabel(center, rP(p.v), fmtPower(p.v).replace(' ', ''));
+          }
           lines += `<path class="wedge" d="${arcPath(center - width / 2 + gap / 2, center + width / 2 - gap / 2, 0, rP(p.v))}"
             fill="${stops[this._bin(p.v)].color}" opacity="${c.sector_opacity}">
             <title>${t('direction', { deg: Math.round(center), dir: dir16(center) })}: max. ${fmtPower(p.v)} (${fmtT(p.t)})</title></path>`;
@@ -1254,11 +1260,29 @@ class HeliosCompassCard extends HTMLElement {
       });
       if (note) note.textContent = t('note_compare', { a: r.label, ad: r.desc, b: other.label, bd: other.desc });
     }
-    this.shadowRoot.querySelector('g.trace').innerHTML = ringSvg + wedges + outline;
+    let labels = '';
+    if (c.sector_labels) {
+      const minV = maxVal * (Math.max(0, Number(c.sector_labels_min) || 0) / 100);
+      sectorTotals.forEach((v, sec) => {
+        if (!(v > 0) || v < minV) return;
+        const txt = unit === '%' ? `${fmtPct(v)}%` : unit === 'Wh' ? fmtEnergy(v).replace(' ', '') : fmtPower(v).replace(' ', '');
+        labels += this._tipLabel(sec * width, rOf(v), txt);
+      });
+    }
+    this.shadowRoot.querySelector('g.trace').innerHTML = ringSvg + wedges + outline + labels;
 
     this._legendShares(agg, metric);
     this._renderStats(agg);
     this._renderError(agg);
+  }
+
+  /** Beschriftung an der Spitze eines Balkens */
+  _tipLabel(center, radius, text) {
+    const [x, y] = this._xy(center, radius + 7);
+    const img = !!this._config.image;
+    return `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" font-size="6.8" font-weight="600" text-anchor="middle" dominant-baseline="middle"
+      fill="${img ? '#fff' : 'var(--primary-text-color, #222)'}" stroke="${img ? 'rgba(0,0,0,.7)' : 'var(--card-background-color, #fff)'}"
+      stroke-width="2.2" paint-order="stroke" pointer-events="none">${text}</text>`;
   }
 
   _legendShares(agg, metric) {
@@ -1477,7 +1501,7 @@ const LABELS_EN = {
   language: 'Language',
   power_unit: 'Power unit (W/kW)', show_utilization: 'Utilization row (% per system)', utilization_base: 'Utilization based on',
   sun_marker: 'Sun marker', sun_marker_position: 'Sun marker position', sun_marker_color: 'Sun marker color',
-  energy_display: '“Yield” view shows', power_style: '“Power” view shows',
+  energy_display: '“Yield” view shows', power_style: '“Power” view shows', sector_labels: 'Values at the bars', sector_labels_min: 'Label bars from (% of largest)',
   title: 'Title (empty = no title)', power_entity: 'PV power sensor', max_power: 'Max. power', legend_label: 'Color scale label',
   metric: 'Default view', default_range: 'Default period', ranges: 'Visible period buttons', sectors: 'Number of direction sectors',
   sector_opacity: 'Sector opacity', show_metric_switch: 'View switch Time / Yield / Avg power', show_stats: 'Key figures', show_legend: 'Color scale',
@@ -1521,7 +1545,7 @@ LABELS = {
   language: 'Sprache',
   power_unit: 'Leistungseinheit (W/kW)', show_utilization: 'Auslastungszeile (% je Anlage)', utilization_base: 'Auslastung bezogen auf',
   sun_marker: 'Sonnenmarker', sun_marker_position: 'Position des Sonnenmarkers', sun_marker_color: 'Farbe des Sonnenmarkers',
-  energy_display: 'Ansicht „Ertrag“ zeigt', power_style: 'Ansicht „Leistung“ zeigt',
+  energy_display: 'Ansicht „Ertrag“ zeigt', power_style: 'Ansicht „Leistung“ zeigt', sector_labels: 'Werte an den Balken', sector_labels_min: 'Beschriften ab (% des größten Balkens)',
   title: 'Titel (leer = kein Titel)',
   power_entity: 'PV-Leistungssensor',
   max_power: 'Max. Leistung',
@@ -1614,6 +1638,10 @@ SECTIONS = [
       { value: 'both', label: L('Linie mit Punkten', 'Line with dots') }, { value: 'line', label: L('Nur Linie', 'Line only') },
       { value: 'dots', label: L('Nur Punkte', 'Dots only') }, { value: 'area', label: L('Fläche', 'Area') },
       { value: 'bars', label: L('Balken (Höchstleistung je Richtung)', 'Bars (peak power per direction)') }] } } },
+    { type: 'grid', name: '', schema: [
+      { name: 'sector_labels', selector: { boolean: {} } },
+      { name: 'sector_labels_min', selector: num(0, 100, 5, '%', 'slider') },
+    ] },
     { name: 'energy_display', selector: { select: { mode: 'dropdown', options: [
       { value: 'absolute', label: L('kWh je Richtung', 'kWh per direction') }, { value: 'percent', label: L('Anteil in %', 'Share in %') }] } } },
     { type: 'grid', name: '', schema: [
