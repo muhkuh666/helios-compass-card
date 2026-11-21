@@ -5,7 +5,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
 [![Validate](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml/badge.svg)](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml)
 ![License](https://img.shields.io/github/license/muhkuh666/helios-compass-card)
-![Version](https://img.shields.io/badge/version-1.9.0-orange.svg)
+![Version](https://img.shields.io/badge/version-1.10.0-orange.svg)
 
 **A solar compass for Home Assistant.** This card shows which compass direction your solar system gets its power from. Each sector of the rose is a sun direction. Colors show power classes, and the sector length shows the share of time or yield. An aerial image of your house can sit underneath.
 
@@ -25,7 +25,8 @@ Works for balcony solar systems, rooftop systems, or both at once.
 ## Features
 
 - **Solar rose:** a 16-point compass rose (N, NNE, NE … NNW) with sectors by sun direction, stacked by power class.
-- **Four views** you can switch between:
+- **Five views** you can switch between:
+  - **Power:** power history as dots and line (angle = sun direction, distance = power in W/kW) with a dot for the current power.
   - **Time:** how long the sun came from each direction.
   - **Yield:** how many kWh came from each direction.
   - **Avg power:** average power per direction.
@@ -112,10 +113,11 @@ You can add, remove and reorder lists (systems, arrays, color steps) with ↑ �
 
 ---
 
-## The four views
+## The five views
 
 | View | Display | Legend | What for? |
 |---|---|---|---|
+| **Power** | history as dots/line, distance from center = power (rings in W/kW), large dot = current power | share of time per power class | When did how much power come from which direction? |
 | **Time** | share of sun time from this direction | share of time per power class | Where is the sun when, and how much do you get then? |
 | **Yield** | kWh from this direction (or share in %, `energy_display`) | share of yield per power class | Where does your energy come from, e.g. today? |
 | **Avg power** | average power with sun from this direction | share of time per power class | Which direction delivers the most on average? |
@@ -340,9 +342,9 @@ Defaults: top left shows the power of the selected system, top right the sun azi
 | `sun_marker` | `arrow` | sun marker: `arrow`, `circle`, `sun`, `dot` or `none` |
 | `sun_marker_position` | `edge` | `edge` or `elevation` (at sun elevation) |
 | `sun_marker_color` | `#f57c00` | sun marker color |
-| `metric` | `time` | default view: `time`, `energy`, `avg_power` or `shading` |
+| `metric` | `time` | default view: `power`, `time`, `energy`, `avg_power` or `shading` |
 | `show_metric_switch` | `true` | show the view switch |
-| `metrics` | all four | views in the switch: `time`, `energy`, `avg_power`, `shading` |
+| `metrics` | all five | views in the switch: `power`, `time`, `energy`, `avg_power`, `shading` |
 | `show_stats` | `true` | show the key figures |
 | `show_legend` | `true` | show the color scale |
 | `ranges` | all | visible period buttons: `today`, `1h`, `8h`, `12h`, `24h`, `7d`, `14d`, `30d`, `1y`, `summer`, `winter` |
@@ -460,6 +462,7 @@ mode: single
 
 | Version | Changes |
 |---|---|
+| **1.10.0** | New “Power” view: power history as dots/line by sun direction with a dot for the current power, rings in W/kW |
 | **1.9.0** | “Today” period; “Yield” view in kWh per direction (`energy_display`); power unit W/kW selectable (card and per corner); utilization in % per system and in total (row and corner value); sun marker as arrow, circle, sun symbol or dot, at the edge or at sun elevation |
 | **1.8.0** | English translation (card, editor, README); language follows the HA user automatically, option `language`; English compass points (E instead of O) |
 | **1.7.1** | House image as an HTML layer instead of SVG, so it works reliably in the Companion app (iOS/Android); note when the image cannot be loaded |

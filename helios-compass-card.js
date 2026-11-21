@@ -4,7 +4,7 @@
  *
  * Installation: siehe README.md
  */
-const CARD_VERSION = '1.9.0';
+const CARD_VERSION = '1.10.0';
 
 /* ---------- Sprache / Language ---------- */
 let LANG = 'de';
@@ -23,6 +23,7 @@ const I18N = {
   de: {
     r_today: 'Heute', r_1h: '1 Std.', r_8h: '8 Std.', r_12h: '12 Std.', r_24h: '24 Std.', r_7d: '7 Tage', r_14d: '14 Tage', r_30d: '30 Tage',
     r_1y: '1 Jahr', r_summer: 'Sommer', r_winter: 'Winter', d_summer: 'Apr–Sep', d_winter: 'Okt–Mär',
+    m_power: 'Leistung', note_power: 'Leistung: Winkel = Sonnenrichtung, Abstand zur Mitte = Leistung', power_now: 'Jetzt: {p}',
     m_time: 'Zeit', m_energy: 'Ertrag', m_avg_power: 'Ø Leistung', m_shading: 'Schatten',
     lg_time: 'Zeitanteil je Leistungsklasse (Sonnenzeit)', lg_energy: 'Ertragsanteil je Leistungsklasse',
     sp_today: 'Heute', sp_summer: '21.6.', sp_winter: '21.12.',
@@ -52,6 +53,7 @@ const I18N = {
   en: {
     r_today: 'Today', r_1h: '1 h', r_8h: '8 h', r_12h: '12 h', r_24h: '24 h', r_7d: '7 days', r_14d: '14 days', r_30d: '30 days',
     r_1y: '1 year', r_summer: 'Summer', r_winter: 'Winter', d_summer: 'Apr–Sep', d_winter: 'Oct–Mar',
+    m_power: 'Power', note_power: 'Power: angle = sun direction, distance from center = power', power_now: 'Now: {p}',
     m_time: 'Time', m_energy: 'Yield', m_avg_power: 'Avg power', m_shading: 'Shading',
     lg_time: 'Share of sun time per power class', lg_energy: 'Share of yield per power class',
     sp_today: 'Today', sp_summer: 'Jun 21', sp_winter: 'Dec 21',
@@ -108,6 +110,7 @@ const RANGES = {
 };
 
 const METRICS = {
+  power: { get label() { return t('m_power'); }, get legend() { return t('lg_time'); } },
   time: { get label() { return t('m_time'); }, get legend() { return t('lg_time'); } },
   energy: { get label() { return t('m_energy'); }, get legend() { return t('lg_energy'); } },
   avg_power: { get label() { return t('m_avg_power'); }, get legend() { return t('lg_time'); } },
@@ -148,7 +151,7 @@ const DEFAULTS = {
   show_total: null, // null = automatisch bei mehreren Anlagen
   show_sun_paths: true,
   sun_path_toggle: true, // ☀-Knopf in der Karte zum Ein-/Ausblenden der Sonnenbahnen
-  metrics: ['time', 'energy', 'avg_power', 'shading'], // angezeigte Ansichten
+  metrics: ['power', 'time', 'energy', 'avg_power', 'shading'], // angezeigte Ansichten
   sun_paths: ['today', 'summer', 'winter'],
   elevation_bands: 9, // Verschattungskarte: Anzahl Höhenringe (9 = 10°)
   season_overlay: true, // Sommer/Winter: andere Jahreszeit als Umriss
@@ -752,6 +755,7 @@ class HeliosCompassCard extends HTMLElement {
       this._save('metric', this._metric);
       this._markButtons();
       this._renderPlot();
+      this._update(true);
     }));
     this.shadowRoot.querySelectorAll('.corner').forEach((el) => el.addEventListener('click', () => {
       const cfg = c.corners[el.dataset.pos];
@@ -1021,6 +1025,42 @@ class HeliosCompassCard extends HTMLElement {
     const r = RANGES[this._range];
     const note = this.shadowRoot.querySelector('.note');
     if (note) note.textContent = '';
+
+    if (metric === 'power') {
+      // Leistungsverlauf: Winkel = Sonnenazimut, Abstand = Leistung
+      const max = this._src().max_power || c.max_power;
+      const rP = (v) => Math.max(0, Math.min(1, v / max)) * R;
+      const line = 'rgba(46,160,120,.55)';
+      let svg = '';
+      [0.25, 0.5, 0.75, 1].forEach((fr) => {
+        if (fr < 1) svg += `<circle r="${(fr * R).toFixed(1)}" fill="none" stroke="${line}" stroke-width=".6"/>`;
+        const [x, y] = this._xy(135, fr * R);
+        svg += labelSvg(x, y, fmtP(fr * max, POWER_UNIT, '', fr * max >= 1000 && POWER_UNIT !== 'W' ? 1 : 0));
+      });
+      const vis = this._series.filter((p) => p.elevation > -1 && p.v >= 1);
+      const pos = vis.map((p) => this._xy(p.azimuth, rP(p.v)));
+      const maxGap = (r.step || 300) * 1500;
+      const fmtT = (ts) => new Date(ts).toLocaleString(LOCALE, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      let lines = '';
+      let dots = '';
+      vis.forEach((p, i) => {
+        const [x, y] = pos[i];
+        const col = stops[this._bin(p.v)].color;
+        const prev = vis[i - 1];
+        if (!r.stats && prev && p.t - prev.t <= maxGap) {
+          const [px, py] = pos[i - 1];
+          lines += `<line x1="${px.toFixed(1)}" y1="${py.toFixed(1)}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="${col}" stroke-width="2.6" stroke-linecap="round" opacity=".9"/>`;
+        }
+        dots += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.stats ? 2.4 : 1.7}" fill="${col}" stroke="rgba(0,0,0,.35)" stroke-width=".4" opacity="${r.stats ? 0.8 : 1}">
+                   <title>${fmtT(p.t)} – ${fmtPower(p.v)} · ${dir16(p.azimuth)} ${Math.round(p.azimuth)}° · ${t('sun_elevation')} ${Math.round(p.elevation)}°</title></circle>`;
+      });
+      this.shadowRoot.querySelector('g.trace').innerHTML = svg + lines + dots;
+      if (note) note.textContent = vis.length ? t('note_power') : '';
+      this._legendShares(agg, 'time');
+      this._renderStats(agg);
+      this._renderError(agg);
+      return;
+    }
 
     if (metric === 'shading') {
       // Verschattungskarte: Richtung × Sonnenhöhe, Farbe = Ø Leistung
@@ -1311,6 +1351,12 @@ class HeliosCompassCard extends HTMLElement {
         sunSvg = `<g ${glow}>${tip}${rays}<circle cx="${f(x)}" cy="${f(y)}" r="4.6" fill="${col}" stroke="#fff" stroke-width="1"/></g>`;
       }
     }
+    if (this._metric === 'power' && up && power > 0) {
+      const max = src.max_power || c.max_power;
+      const [px, py] = this._xy(a, Math.min(1, power / max) * R);
+      sunSvg += `<circle cx="${f(px)}" cy="${f(py)}" r="5.5" fill="${src.color_stops[this._bin(power)].color}" stroke="#fff" stroke-width="2"
+        filter="drop-shadow(0 0 2px rgba(0,0,0,.5))"><title>${t('power_now', { p: fmtPower(power) })}</title></circle>`;
+    }
     if (this._showPaths && up && !atElev) {
       const [sx, sy] = this._xy(a, (1 - sun.elevation / 90) * R);
       sunSvg += `<circle cx="${f(sx)}" cy="${f(sy)}" r="5" fill="#ffc107" stroke="#fff" stroke-width="1.5"
@@ -1483,11 +1529,13 @@ SECTIONS = [
   { key: 'display', title: L('Darstellung', 'Display'), icon: '🧭', schema: [
     { type: 'grid', name: '', schema: [
       { name: 'metric', selector: { select: { mode: 'dropdown', options: [
+        { value: 'power', label: L('Leistung (Verlauf als Punkte)', 'Power (history as dots)') },
         { value: 'time', label: L('Zeitanteil', 'Share of time') }, { value: 'energy', label: L('Ertrag', 'Yield') }, { value: 'avg_power', label: L('Ø Leistung', 'Avg power') },
         { value: 'shading', label: L('Schatten (Richtung × Sonnenhöhe)', 'Shading (direction × sun elevation)') }] } } },
       { name: 'default_range', selector: { select: { mode: 'dropdown', options: RANGE_OPTIONS } } },
     ] },
     { name: 'metrics', selector: { select: { multiple: true, mode: 'list', options: [
+      { value: 'power', label: L('Leistung', 'Power') },
       { value: 'time', label: L('Zeit', 'Time') }, { value: 'energy', label: L('Ertrag', 'Yield') }, { value: 'avg_power', label: L('Ø Leistung', 'Avg power') },
       { value: 'shading', label: L('Schatten (Verschattungskarte)', 'Shading (shading map)') }] } } },
     { name: 'ranges', selector: { select: { multiple: true, mode: 'list', options: RANGE_OPTIONS } } },

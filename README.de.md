@@ -5,7 +5,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
 [![Validate](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml/badge.svg)](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml)
 ![Lizenz](https://img.shields.io/github/license/muhkuh666/helios-compass-card)
-![Version](https://img.shields.io/badge/version-1.9.0-orange.svg)
+![Version](https://img.shields.io/badge/version-1.10.0-orange.svg)
 
 **PV-Sonnenkompass für Home Assistant.** Die Karte zeigt, aus welcher Himmelsrichtung deine Solaranlage wie viel liefert. Jeder Sektor der Rose steht für eine Sonnenrichtung. Die Farben zeigen die Leistungsklassen, die Länge den Anteil an Zeit oder Ertrag. Darunter liegt auf Wunsch ein Luftbild deines Hauses.
 
@@ -25,7 +25,8 @@ Geeignet für Balkonkraftwerke, Dachanlagen und beides zusammen.
 ## Funktionen
 
 - **Solarrose:** 16-teilige Kompassrose (N, NNO, NO … NNW) mit Sektoren nach Sonnenrichtung, gestapelt nach Leistungsklassen.
-- **Vier Ansichten** per Umschalter:
+- **Fünf Ansichten** per Umschalter:
+  - **Leistung:** Leistungsverlauf als Punkte und Linie (Winkel = Sonnenrichtung, Abstand = Leistung in W/kW) mit Punkt für die aktuelle Leistung.
   - **Zeit:** Wie lange kam die Sonne aus welcher Richtung?
   - **Ertrag:** Wie viel kWh kamen aus welcher Richtung?
   - **Ø Leistung:** Durchschnittsleistung je Richtung.
@@ -112,10 +113,11 @@ Listen (Anlagen, Modulfelder, Farbstufen) lassen sich hinzufügen, entfernen und
 
 ---
 
-## Die vier Ansichten
+## Die fünf Ansichten
 
 | Ansicht | Darstellung | Legende | Wofür? |
 |---|---|---|---|
+| **Leistung** | Verlauf als Punkte/Linie, Abstand zur Mitte = Leistung (Ringe in W/kW), großer Punkt = aktuelle Leistung | Zeitanteil je Leistungsklasse | Wann kam aus welcher Richtung wie viel Leistung? |
 | **Zeit** | Anteil der Sonnenzeit aus dieser Richtung | Zeitanteil je Leistungsklasse | Wann steht die Sonne wo, und wie viel kommt dabei an? |
 | **Ertrag** | kWh aus dieser Richtung (oder Anteil in %, `energy_display`) | Ertragsanteil je Leistungsklasse | Aus welcher Richtung kommt meine Energie, z. B. heute? |
 | **Ø Leistung** | Durchschnittsleistung bei Sonne aus dieser Richtung | Zeitanteil je Leistungsklasse | Welche Richtung liefert im Schnitt am meisten? |
@@ -340,7 +342,7 @@ Die Standardbelegung: oben links die Leistung der gewählten Anlage, oben rechts
 | `sun_marker` | `arrow` | Sonnenmarker: `arrow`, `circle`, `sun`, `dot` oder `none` |
 | `sun_marker_position` | `edge` | `edge` (am Rand) oder `elevation` (auf Sonnenhöhe) |
 | `sun_marker_color` | `#f57c00` | Farbe des Sonnenmarkers |
-| `metric` | `time` | Standard-Ansicht: `time`, `energy`, `avg_power` oder `shading` |
+| `metric` | `time` | Standard-Ansicht: `power`, `time`, `energy`, `avg_power` oder `shading` |
 | `show_metric_switch` | `true` | Umschalter Zeit / Ertrag / Ø Leistung / Schatten anzeigen |
 | `show_stats` | `true` | Kennzahlen-Zeile anzeigen |
 | `show_legend` | `true` | Farbskala anzeigen |
@@ -348,7 +350,7 @@ Die Standardbelegung: oben links die Leistung der gewählten Anlage, oben rechts
 | `season_overlay` | `true` | bei Sommer/Winter die andere Jahreszeit gestrichelt zeigen |
 | `show_sun_paths` | `true` | Sonnenbahnen einzeichnen (Standardzustand) |
 | `sun_path_toggle` | `true` | ☀-Knopf in der Karte zum Ein-/Ausblenden der Sonnenbahnen (wird gemerkt) |
-| `metrics` | alle vier | angezeigte Ansichten im Umschalter: `time`, `energy`, `avg_power`, `shading` |
+| `metrics` | alle fünf | angezeigte Ansichten im Umschalter: `power`, `time`, `energy`, `avg_power`, `shading` |
 | `sun_paths` | `[today, summer, winter]` | welche Bahnen: heute, 21.6., 21.12. |
 | `elevation_bands` | `9` | Schatten-Ansicht: Anzahl Höhenringe (9 = 10°) |
 | `default_range` | `8h` | Start-Zeitraum |
@@ -461,6 +463,7 @@ mode: single
 
 | Version | Änderungen |
 |---|---|
+| **1.10.0** | Neue Ansicht „Leistung“: Leistungsverlauf als Punkte/Linie nach Sonnenrichtung mit Punkt für die aktuelle Leistung, Ringe in W/kW |
 | **1.9.0** | Zeitraum „Heute“; Ansicht „Ertrag“ in kWh je Richtung (`energy_display`); Leistungseinheit W/kW wählbar (Karte und je Ecke); Auslastung in % je Anlage und gesamt (Zeile und Eckwert); Sonnenmarker als Pfeil, Kreis, Sonnensymbol oder Punkt, am Rand oder auf Sonnenhöhe |
 | **1.8.0** | Englische Übersetzung (Karte, Editor, README); Sprache automatisch nach HA-Benutzer, Option `language`; englische Himmelsrichtungen (E statt O) |
 | **1.7.1** | Hausbild als HTML-Ebene statt SVG, dadurch zuverlässig auch in der Companion-App (iOS/Android); Hinweis, wenn das Bild nicht geladen werden kann |
