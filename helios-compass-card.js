@@ -4,7 +4,7 @@
  *
  * Installation: siehe README.md
  */
-const CARD_VERSION = '1.12.0';
+const CARD_VERSION = '1.13.0';
 
 /* ---------- Sprache / Language ---------- */
 let LANG = 'de';
@@ -30,7 +30,7 @@ const I18N = {
     pv_power: 'PV-Leistung', total: 'Gesamt', power_of: '{name}-Leistung', today_of: '{name} heute', yield_today: 'Ertrag heute',
     sun_azimuth: 'Sonnenazimut', sun_elevation: 'Sonnenhöhe',
     err_config: 'Bitte "power_entity" oder "sources" angeben (z. B. sensor.pv_leistung).',
-    toggle_paths: 'Sonnenbahnen ein-/ausblenden',
+    toggle_paths: 'Sonnenbahnen ein-/ausblenden', toggle_labels: 'Werte an den Balken ein-/ausblenden',
     st_yield: 'Ertrag', st_yield_measured: 'Ertrag (gemessen)', st_peak: 'Spitze', st_best: 'Beste Richtung',
     pct_of_yield: '{pct} % des Ertrags', of_yield: 'des Ertrags', of_suntime: 'der Sonnenzeit',
     last: 'letzte {label}', last12: '{desc}, letzte 12 Mon.',
@@ -60,7 +60,7 @@ const I18N = {
     pv_power: 'PV power', total: 'Total', power_of: '{name} power', today_of: '{name} today', yield_today: 'Yield today',
     sun_azimuth: 'Sun azimuth', sun_elevation: 'Sun elevation',
     err_config: 'Please set "power_entity" or "sources" (e.g. sensor.pv_power).',
-    toggle_paths: 'Show/hide sun paths',
+    toggle_paths: 'Show/hide sun paths', toggle_labels: 'Show/hide values at the bars',
     st_yield: 'Yield', st_yield_measured: 'Yield (measured)', st_peak: 'Peak', st_best: 'Best direction',
     pct_of_yield: '{pct} % of yield', of_yield: 'of yield', of_suntime: 'of sun time',
     last: 'last {label}', last12: '{desc}, last 12 mo.',
@@ -165,7 +165,8 @@ const DEFAULTS = {
   sun_marker_color: '#f57c00',
   power_style: 'both', // Ansicht Leistung: 'both' | 'line' | 'dots' | 'area' | 'bars'
   sector_labels: false, // Werte an den Balkenspitzen anzeigen
-  sector_labels_min: 20, // nur Balken ab x % des größten Balkens beschriften
+  sector_labels_min: 20,
+  label_toggle: true, // %-Knopf in der Karte zum Ein-/Ausblenden der Balkenwerte // nur Balken ab x % des größten Balkens beschriften
   energy_display: 'absolute', // Ansicht Ertrag: 'absolute' (kWh je Richtung) | 'percent'
   get total_name() { return t('total'); },
   language: 'auto', // 'auto' | 'de' | 'en'
@@ -236,7 +237,7 @@ function fmtP(w, unit = POWER_UNIT, sep = ' ', dec) {
   return `${fmtNum(w, dec ?? 0)}${sep}W`;
 }
 const fmtPower = (w) => fmtP(w);
-const fmtEnergy = (wh) => (wh >= 1000 ? `${fmtNum(wh / 1000, wh >= 100000 ? 0 : wh >= 10000 ? 1 : 2)} kWh` : `${fmtNum(wh)} Wh`);
+const fmtEnergy = (wh) => (Math.round(wh) >= 1000 ? `${fmtNum(wh / 1000, wh >= 100000 ? 0 : wh >= 10000 ? 1 : 2)} kWh` : `${fmtNum(wh)} Wh`);
 
 class HeliosCompassCard extends HTMLElement {
   constructor() {
@@ -326,6 +327,8 @@ class HeliosCompassCard extends HTMLElement {
     this._metric = c.show_metric_switch && c.metrics.includes(this._load('metric')) ? this._load('metric') : c.metric;
     const sp = this._load('sunpaths');
     this._showPaths = c.show_sun_paths && c.sun_path_toggle && sp !== null ? sp === '1' : c.show_sun_paths;
+    const sl = this._load('labels');
+    this._showLabels = c.label_toggle && sl !== null ? sl === '1' : !!c.sector_labels;
     const wanted = this._load('source') || (c.default_source === 'total' ? '__total' : c.default_source);
     this._sourceId = c.sources.some((x) => x.id === wanted) ? wanted : c.sources[0].id;
     this._built = false;
@@ -640,13 +643,17 @@ class HeliosCompassCard extends HTMLElement {
         .top { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:4px 8px; margin-bottom:2px; }
         .title { font-size: 1.25em; color: var(--primary-text-color); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
         .metrics { display:flex; border:1px solid var(--divider-color, #ccc); border-radius:14px; overflow:hidden; flex-shrink:0; }
-        .metrics button { font: inherit; font-size:.72em; padding:3px 8px; border:0; background:transparent; cursor:pointer;
+        .metrics button { font: inherit; font-size:.72em; padding:3px 6px; border:0; background:transparent; cursor:pointer;
                  color: var(--secondary-text-color); }
         .metrics button + button { border-left:1px solid var(--divider-color, #ccc); }
-        .tools { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+        .tools { display:flex; align-items:center; gap:5px; flex-wrap:wrap; }
+        .tgls { display:inline-flex; gap:4px; flex-wrap:nowrap; }
+        .tgls:empty { display:none; }
         .tgl { font: inherit; font-size:.8em; line-height:1; width:24px; height:22px; border-radius:11px; cursor:pointer; padding:0;
                border:1px solid var(--divider-color, #ccc); background:transparent; color: var(--secondary-text-color); filter: grayscale(1); opacity:.6; }
         .tgl.on { background:#fff3cd; border-color:#f5b400; filter:none; opacity:1; }
+        .tgl.pct { font-weight:700; color: var(--primary-text-color); }
+        .tgl.pct.on { background: var(--primary-color, #03a9f4); border-color: var(--primary-color, #03a9f4); color: var(--text-primary-color, #fff); }
         .metrics button.active, .sources button.active { background: var(--primary-color, #03a9f4); color: var(--text-primary-color, #fff); }
         .sources { display:inline-flex; flex-wrap:wrap; border:1px solid var(--divider-color, #ccc); border-radius:14px; overflow:hidden; margin:2px 0 4px; }
         .sources button { font: inherit; font-size:.78em; padding:3px 10px; border:0; background:transparent; cursor:pointer;
@@ -703,11 +710,12 @@ class HeliosCompassCard extends HTMLElement {
         .yield b { color: var(--primary-text-color); font-weight:500; }
       </style>
       <ha-card>
-        ${c.title || c.show_metric_switch || c.sun_path_toggle ? `<div class="top">
+        ${c.title || c.show_metric_switch || c.sun_path_toggle || c.label_toggle ? `<div class="top">
           <div class="title">${esc(c.title || '')}</div>
           <div class="tools">
             ${c.show_metric_switch && c.metrics.length > 1 ? `<div class="metrics">${c.metrics.map((k) => `<button data-m="${k}">${METRICS[k].label}</button>`).join('')}</div>` : ''}
-            ${c.show_sun_paths && c.sun_path_toggle && c.sun_paths.length ? `<button class="tgl" title="${t('toggle_paths')}">☀</button>` : ''}
+            <span class="tgls">${c.show_sun_paths && c.sun_path_toggle && c.sun_paths.length ? `<button class="tgl" data-t="paths" title="${t('toggle_paths')}">☀</button>` : ''}
+            ${c.label_toggle ? `<button class="tgl pct" data-t="labels" title="${t('toggle_labels')}">%</button>` : ''}</span>
           </div>
         </div>` : ''}
         ${c.sources.length > 1 ? `<div class="sources">${c.sources.map((x) => `<button data-src="${esc(x.id)}">${esc(x.name || this._hass?.states[x.entities[0]]?.attributes.friendly_name || x.entities[0])}</button>`).join('')}</div>` : ''}
@@ -746,7 +754,13 @@ class HeliosCompassCard extends HTMLElement {
       this._markButtons();
       this._switchSource();
     }));
-    this.shadowRoot.querySelector('.tgl')?.addEventListener('click', () => {
+    this.shadowRoot.querySelector('.tgl[data-t="labels"]')?.addEventListener('click', () => {
+      this._showLabels = !this._showLabels;
+      this._save('labels', this._showLabels ? '1' : '0');
+      this._markButtons();
+      this._renderPlot();
+    });
+    this.shadowRoot.querySelector('.tgl[data-t="paths"]')?.addEventListener('click', () => {
       this._showPaths = !this._showPaths;
       this._save('sunpaths', this._showPaths ? '1' : '0');
       this._markButtons();
@@ -778,7 +792,8 @@ class HeliosCompassCard extends HTMLElement {
     this.shadowRoot.querySelectorAll('.buttons button').forEach((b) => b.classList.toggle('active', b.dataset.r === this._range));
     this.shadowRoot.querySelectorAll('.metrics button').forEach((b) => b.classList.toggle('active', b.dataset.m === this._metric));
     this.shadowRoot.querySelectorAll('.sources button').forEach((b) => b.classList.toggle('active', b.dataset.src === this._sourceId));
-    this.shadowRoot.querySelector('.tgl')?.classList.toggle('on', !!this._showPaths);
+    this.shadowRoot.querySelector('.tgl[data-t="paths"]')?.classList.toggle('on', !!this._showPaths);
+    this.shadowRoot.querySelector('.tgl[data-t="labels"]')?.classList.toggle('on', !!this._showLabels);
   }
 
   _legendHtml() {
@@ -1063,7 +1078,7 @@ class HeliosCompassCard extends HTMLElement {
         best.forEach((p, sec) => {
           if (!p) return;
           const center = sec * width;
-          if (c.sector_labels && p.v >= bestMax * (Math.max(0, Number(c.sector_labels_min) || 0) / 100)) {
+          if (this._showLabels && p.v >= bestMax * (Math.max(0, Number(c.sector_labels_min) || 0) / 100)) {
             dots += this._tipLabel(center, rP(p.v), fmtPower(p.v).replace(' ', ''));
           }
           lines += `<path class="wedge" d="${arcPath(center - width / 2 + gap / 2, center + width / 2 - gap / 2, 0, rP(p.v))}"
@@ -1261,7 +1276,7 @@ class HeliosCompassCard extends HTMLElement {
       if (note) note.textContent = t('note_compare', { a: r.label, ad: r.desc, b: other.label, bd: other.desc });
     }
     let labels = '';
-    if (c.sector_labels) {
+    if (this._showLabels) {
       const minV = maxVal * (Math.max(0, Number(c.sector_labels_min) || 0) / 100);
       sectorTotals.forEach((v, sec) => {
         if (!(v > 0) || v < minV) return;
@@ -1501,7 +1516,7 @@ const LABELS_EN = {
   language: 'Language',
   power_unit: 'Power unit (W/kW)', show_utilization: 'Utilization row (% per system)', utilization_base: 'Utilization based on',
   sun_marker: 'Sun marker', sun_marker_position: 'Sun marker position', sun_marker_color: 'Sun marker color',
-  energy_display: '“Yield” view shows', power_style: '“Power” view shows', sector_labels: 'Values at the bars', sector_labels_min: 'Label bars from (% of largest)',
+  energy_display: '“Yield” view shows', power_style: '“Power” view shows', sector_labels: 'Values at the bars', label_toggle: '% button on the card to show/hide values', sector_labels_min: 'Label bars from (% of largest)',
   title: 'Title (empty = no title)', power_entity: 'PV power sensor', max_power: 'Max. power', legend_label: 'Color scale label',
   metric: 'Default view', default_range: 'Default period', ranges: 'Visible period buttons', sectors: 'Number of direction sectors',
   sector_opacity: 'Sector opacity', show_metric_switch: 'View switch Time / Yield / Avg power', show_stats: 'Key figures', show_legend: 'Color scale',
@@ -1545,7 +1560,7 @@ LABELS = {
   language: 'Sprache',
   power_unit: 'Leistungseinheit (W/kW)', show_utilization: 'Auslastungszeile (% je Anlage)', utilization_base: 'Auslastung bezogen auf',
   sun_marker: 'Sonnenmarker', sun_marker_position: 'Position des Sonnenmarkers', sun_marker_color: 'Farbe des Sonnenmarkers',
-  energy_display: 'Ansicht „Ertrag“ zeigt', power_style: 'Ansicht „Leistung“ zeigt', sector_labels: 'Werte an den Balken', sector_labels_min: 'Beschriften ab (% des größten Balkens)',
+  energy_display: 'Ansicht „Ertrag“ zeigt', power_style: 'Ansicht „Leistung“ zeigt', sector_labels: 'Werte an den Balken', label_toggle: '%-Knopf in der Karte zum Ein-/Ausblenden der Werte', sector_labels_min: 'Beschriften ab (% des größten Balkens)',
   title: 'Titel (leer = kein Titel)',
   power_entity: 'PV-Leistungssensor',
   max_power: 'Max. Leistung',
@@ -1640,6 +1655,7 @@ SECTIONS = [
       { value: 'bars', label: L('Balken (Höchstleistung je Richtung)', 'Bars (peak power per direction)') }] } } },
     { type: 'grid', name: '', schema: [
       { name: 'sector_labels', selector: { boolean: {} } },
+      { name: 'label_toggle', selector: { boolean: {} } },
       { name: 'sector_labels_min', selector: num(0, 100, 5, '%', 'slider') },
     ] },
     { name: 'energy_display', selector: { select: { mode: 'dropdown', options: [

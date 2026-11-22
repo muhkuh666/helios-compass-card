@@ -5,7 +5,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
 [![Validate](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml/badge.svg)](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml)
 ![License](https://img.shields.io/github/license/muhkuh666/helios-compass-card)
-![Version](https://img.shields.io/badge/version-1.12.0-orange.svg)
+![Version](https://img.shields.io/badge/version-1.13.0-orange.svg)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-muhkuh666-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/muhkuh666)
 
 **A solar compass for Home Assistant.** This card shows which compass direction your solar system gets its power from. Each sector of the rose is a sun direction. Colors show power classes, and the sector length shows the share of time or yield. An aerial image of your house can sit underneath.
@@ -339,6 +339,7 @@ Defaults: top left shows the power of the selected system, top right the sun azi
 | `power_unit` | `auto` | show power in `W`, `kW` or automatically (`auto`, kW from 1000 W) |
 | `power_style` | `both` | “Power” view: `both` (line with dots), `line`, `dots`, `area` (from 7 days: avg and max per direction) or `bars` (peak power per direction) |
 | `sector_labels` | `false` | show the value at the tip of each bar (% for “Time”, kWh for “Yield”, W/kW for “Avg power” and power bars) |
+| `label_toggle` | `true` | % button next to ☀ to show/hide the bar values (remembered) |
 | `sector_labels_min` | `20` | only label bars that are at least x % of the largest one |
 | `energy_display` | `absolute` | “Yield” view: `absolute` (kWh per direction) or `percent` (share in %) |
 | `show_utilization` | `true` | utilization row with % per system and in total |
@@ -466,6 +467,7 @@ mode: single
 
 | Version | Changes |
 |---|---|
+| **1.13.0** | % button on the card to show/hide bar values (`label_toggle`); more compact view switch; shows “1.00 kWh” instead of “1,000 Wh” |
 | **1.12.0** | Values at the bar tips (`sector_labels`, `sector_labels_min`) |
 | **1.11.1** | Maintenance release for inclusion in the HACS store (all checks passed) |
 | **1.11.0** | “Power” view as line with dots, line only, dots only, area or bars (`power_style`) |
