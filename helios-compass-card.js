@@ -4,7 +4,7 @@
  *
  * Installation: siehe README.md
  */
-const CARD_VERSION = '1.17.0';
+const CARD_VERSION = '1.18.0';
 
 /* ---------- Sprache / Language ---------- */
 let LANG = 'de';
@@ -32,7 +32,7 @@ const I18N = {
     pv_power: 'PV-Leistung', total: 'Gesamt', power_of: '{name}-Leistung', today_of: '{name} heute', yield_today: 'Ertrag heute',
     sun_azimuth: 'Sonnenazimut', sun_elevation: 'Sonnenhöhe',
     err_config: 'Bitte "power_entity" oder "sources" angeben (z. B. sensor.pv_leistung).',
-    toggle_paths: 'Sonnenbahnen ein-/ausblenden', toggle_labels: 'Werte an den Balken ein-/ausblenden',
+    toggle_paths: 'Sonnenbahnen ein-/ausblenden', toggle_labels: 'Werte an den Balken ein-/ausblenden', toggle_areas: 'Flächen ein-/ausblenden',
     st_yield: 'Ertrag', st_yield_measured: 'Ertrag (gemessen)', st_peak: 'Spitze', st_best: 'Beste Richtung',
     pct_of_yield: '{pct} % des Ertrags', of_yield: 'des Ertrags', of_suntime: 'der Sonnenzeit',
     last: 'letzte {label}', last12: '{desc}, letzte 12 Mon.',
@@ -64,7 +64,7 @@ const I18N = {
     pv_power: 'PV power', total: 'Total', power_of: '{name} power', today_of: '{name} today', yield_today: 'Yield today',
     sun_azimuth: 'Sun azimuth', sun_elevation: 'Sun elevation',
     err_config: 'Please set "power_entity" or "sources" (e.g. sensor.pv_power).',
-    toggle_paths: 'Show/hide sun paths', toggle_labels: 'Show/hide values at the bars',
+    toggle_paths: 'Show/hide sun paths', toggle_labels: 'Show/hide values at the bars', toggle_areas: 'Show/hide areas',
     st_yield: 'Yield', st_yield_measured: 'Yield (measured)', st_peak: 'Peak', st_best: 'Best direction',
     pct_of_yield: '{pct} % of yield', of_yield: 'of yield', of_suntime: 'of sun time',
     last: 'last {label}', last12: '{desc}, last 12 mo.',
@@ -175,6 +175,7 @@ const DEFAULTS = {
   label_toggle: true,
   areas: [], // markierte Modulflächen im Hausbild (Raster und/oder Polygone)
   area_labels: true, // Beschriftung der Flächen
+  area_toggle: true, // ▦-Knopf in der Karte zum Ein-/Ausblenden der Flächen
   area_summary: 'areas', // Summenzeile Leistung je Fläche + Gesamt: 'areas' (nur Ansicht Flächen) | 'always' | 'off' // %-Knopf in der Karte zum Ein-/Ausblenden der Balkenwerte // nur Balken ab x % des größten Balkens beschriften
   energy_display: 'absolute', // Ansicht Ertrag: 'absolute' (kWh je Richtung) | 'percent'
   get total_name() { return t('total'); },
@@ -373,6 +374,8 @@ class HeliosCompassCard extends HTMLElement {
     this._showPaths = c.show_sun_paths && c.sun_path_toggle && sp !== null ? sp === '1' : c.show_sun_paths;
     const sl = this._load('labels');
     this._showLabels = c.label_toggle && sl !== null ? sl === '1' : !!c.sector_labels;
+    const sa = this._load('areas');
+    this._showAreas = c.area_toggle && sa !== null ? sa === '1' : true;
     const wanted = this._load('source') || (c.default_source === 'total' ? '__total' : c.default_source);
     this._sourceId = c.sources.some((x) => x.id === wanted) ? wanted : c.sources[0].id;
     this._built = false;
@@ -696,7 +699,7 @@ class HeliosCompassCard extends HTMLElement {
         .tgl { font: inherit; font-size:.8em; line-height:1; width:24px; height:22px; border-radius:11px; cursor:pointer; padding:0;
                border:1px solid var(--divider-color, #ccc); background:transparent; color: var(--secondary-text-color); filter: grayscale(1); opacity:.6; }
         .tgl.on { background:#fff3cd; border-color:#f5b400; filter:none; opacity:1; }
-        .tgl.pct { font-weight:700; color: var(--primary-text-color); }
+        .tgl.pct, .tgl.ar { font-weight:700; color: var(--primary-text-color); }
         .tgl.pct.on { background: var(--primary-color, #03a9f4); border-color: var(--primary-color, #03a9f4); color: var(--text-primary-color, #fff); }
         .metrics button.active, .sources button.active { background: var(--primary-color, #03a9f4); color: var(--text-primary-color, #fff); }
         .sources { display:inline-flex; flex-wrap:wrap; border:1px solid var(--divider-color, #ccc); border-radius:14px; overflow:hidden; margin:2px 0 4px; }
@@ -762,12 +765,13 @@ class HeliosCompassCard extends HTMLElement {
         .yield b { color: var(--primary-text-color); font-weight:500; }
       </style>
       <ha-card>
-        ${c.title || c.show_metric_switch || c.sun_path_toggle || c.label_toggle ? `<div class="top">
+        ${c.title || c.show_metric_switch || c.sun_path_toggle || c.label_toggle || this._areaToggle() ? `<div class="top">
           <div class="title">${esc(c.title || '')}</div>
           <div class="tools">
             ${c.show_metric_switch && c.metrics.length > 1 ? `<div class="metrics">${c.metrics.map((k) => `<button data-m="${k}">${METRICS[k].label}</button>`).join('')}</div>` : ''}
             <span class="tgls">${c.show_sun_paths && c.sun_path_toggle && c.sun_paths.length ? `<button class="tgl" data-t="paths" title="${t('toggle_paths')}">☀</button>` : ''}
-            ${c.label_toggle ? `<button class="tgl pct" data-t="labels" title="${t('toggle_labels')}">%</button>` : ''}</span>
+            ${c.label_toggle ? `<button class="tgl pct" data-t="labels" title="${t('toggle_labels')}">%</button>` : ''}
+            ${this._areaToggle() ? `<button class="tgl ar" data-t="areas" title="${t('toggle_areas')}">▦</button>` : ''}</span>
           </div>
         </div>` : ''}
         ${c.sources.length > 1 ? `<div class="sources">${c.sources.map((x) => `<button data-src="${esc(x.id)}">${esc(x.name || this._hass?.states[x.entities[0]]?.attributes.friendly_name || x.entities[0])}</button>`).join('')}</div>` : ''}
@@ -813,6 +817,12 @@ class HeliosCompassCard extends HTMLElement {
       this._markButtons();
       this._renderPlot();
     });
+    this.shadowRoot.querySelector('.tgl[data-t="areas"]')?.addEventListener('click', () => {
+      this._showAreas = !this._showAreas;
+      this._save('areas', this._showAreas ? '1' : '0');
+      this._markButtons();
+      this._renderAreas();
+    });
     this.shadowRoot.querySelector('.tgl[data-t="paths"]')?.addEventListener('click', () => {
       this._showPaths = !this._showPaths;
       this._save('sunpaths', this._showPaths ? '1' : '0');
@@ -847,6 +857,12 @@ class HeliosCompassCard extends HTMLElement {
     this.shadowRoot.querySelectorAll('.sources button').forEach((b) => b.classList.toggle('active', b.dataset.src === this._sourceId));
     this.shadowRoot.querySelector('.tgl[data-t="paths"]')?.classList.toggle('on', !!this._showPaths);
     this.shadowRoot.querySelector('.tgl[data-t="labels"]')?.classList.toggle('on', !!this._showLabels);
+    this.shadowRoot.querySelector('.tgl[data-t="areas"]')?.classList.toggle('on', !!this._showAreas);
+  }
+
+  _areaToggle() {
+    const c = this._config;
+    return !!(c.area_toggle && c.image && c.areas.length);
   }
 
   _legendHtml() {
@@ -999,7 +1015,7 @@ class HeliosCompassCard extends HTMLElement {
     const c = this._config;
     const g = this.shadowRoot.querySelector('g.areas');
     if (!g) return;
-    if (!c.image || !c.areas.length || !this._imgAR) { g.innerHTML = ''; return; }
+    if (!c.image || !c.areas.length || !this._imgAR || (this._areaToggle() && !this._showAreas)) { g.innerHTML = ''; return; }
     const { pt, k } = this._areaMap();
     const f = (v) => v.toFixed(2);
     let svg = '';
@@ -1839,7 +1855,7 @@ let SOURCE_SCHEMA; let MODULE_SCHEMA; let STOP_SCHEMA; let TOTAL_SCHEMA;
 
 const LABELS_EN = {
   language: 'Language',
-  source: 'Power sensor of this area (W or kW)', system: 'Belongs to system', g_rot: 'Grid rotation', g_w: 'Panel width', g_h: 'Panel height', g_x: 'Move grid ↔', g_y: 'Move grid ↕', cell_entity: 'Sensor for the next panel', area_labels: 'Labels on the areas', area_summary: 'Summary row (power per area + total)',
+  source: 'Power sensor of this area (W or kW)', system: 'Belongs to system', g_rot: 'Grid rotation', g_w: 'Panel width', g_h: 'Panel height', g_x: 'Move grid ↔', g_y: 'Move grid ↕', cell_entity: 'Sensor for the next panel', area_labels: 'Labels on the areas', area_toggle: '▦ button on the card to show/hide the areas', area_summary: 'Summary row (power per area + total)',
   power_unit: 'Power unit (W/kW)', show_utilization: 'Utilization row (% per system)', utilization_base: 'Utilization based on',
   sun_marker: 'Sun marker', sun_marker_position: 'Sun marker position', sun_marker_color: 'Sun marker color',
   energy_display: '“Yield” view shows', power_style: '“Power” view shows', sector_labels: 'Values at the bars', label_toggle: '% button on the card to show/hide values', sector_labels_min: 'Label bars from (% of largest)',
@@ -1884,7 +1900,7 @@ const COLOR = { text: { type: 'color' } };
 
 LABELS = {
   language: 'Sprache',
-  source: 'Leistungssensor dieser Fläche (W oder kW)', system: 'Gehört zu Anlage', g_rot: 'Raster-Drehung', g_w: 'Modul-Breite', g_h: 'Modul-Höhe', g_x: 'Raster verschieben ↔', g_y: 'Raster verschieben ↕', cell_entity: 'Sensor für das nächste Modul', area_labels: 'Beschriftung auf den Flächen', area_summary: 'Summenzeile (Leistung je Fläche + Gesamt)',
+  source: 'Leistungssensor dieser Fläche (W oder kW)', system: 'Gehört zu Anlage', g_rot: 'Raster-Drehung', g_w: 'Modul-Breite', g_h: 'Modul-Höhe', g_x: 'Raster verschieben ↔', g_y: 'Raster verschieben ↕', cell_entity: 'Sensor für das nächste Modul', area_labels: 'Beschriftung auf den Flächen', area_toggle: '▦-Knopf in der Karte zum Ein-/Ausblenden der Flächen', area_summary: 'Summenzeile (Leistung je Fläche + Gesamt)',
   power_unit: 'Leistungseinheit (W/kW)', show_utilization: 'Auslastungszeile (% je Anlage)', utilization_base: 'Auslastung bezogen auf',
   sun_marker: 'Sonnenmarker', sun_marker_position: 'Position des Sonnenmarkers', sun_marker_color: 'Farbe des Sonnenmarkers',
   energy_display: 'Ansicht „Ertrag“ zeigt', power_style: 'Ansicht „Leistung“ zeigt', sector_labels: 'Werte an den Balken', label_toggle: '%-Knopf in der Karte zum Ein-/Ausblenden der Werte', sector_labels_min: 'Beschriften ab (% des größten Balkens)',
@@ -2434,12 +2450,14 @@ class HeliosCompassCardEditor extends HTMLElement {
       'Mark each string in the house image: add an area, assign the system, then “🖌 Mark in image”. Easiest with the grid: rotate it to the panel rows, set the cell size to one panel and click or brush over the panels. Azimuth/tilt (optional) show whether the sun currently hits the area.')));
     body.append(this._form([
       { name: 'area_labels', selector: { boolean: {} } },
+      { name: 'area_toggle', selector: { boolean: {} } },
       { name: 'area_summary', selector: { select: { mode: 'dropdown', options: [
         { value: 'areas', label: L('Nur in der Ansicht „Flächen“', 'Only in the “Areas” view') },
         { value: 'always', label: L('In allen Ansichten', 'In all views') },
         { value: 'off', label: L('Aus', 'Off') }] } } },
-    ], { area_labels: w.area_labels ?? true, area_summary: w.area_summary ?? 'areas' }, (v) => {
+    ], { area_labels: w.area_labels ?? true, area_toggle: w.area_toggle ?? true, area_summary: w.area_summary ?? 'areas' }, (v) => {
       this._set('area_labels', v.area_labels === true ? undefined : v.area_labels);
+      this._set('area_toggle', v.area_toggle === true ? undefined : v.area_toggle);
       this._set('area_summary', v.area_summary === 'areas' ? undefined : v.area_summary);
       this._emit();
     }));

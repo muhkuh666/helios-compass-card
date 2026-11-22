@@ -5,7 +5,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
 [![Validate](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml/badge.svg)](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml)
 ![Lizenz](https://img.shields.io/github/license/muhkuh666/helios-compass-card)
-![Version](https://img.shields.io/badge/version-1.17.0-orange.svg)
+![Version](https://img.shields.io/badge/version-1.18.0-orange.svg)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-muhkuh666-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/muhkuh666)
 
 **PV-Sonnenkompass für Home Assistant.** Die Karte zeigt, aus welcher Himmelsrichtung deine Solaranlage wie viel liefert. Jeder Sektor der Rose steht für eine Sonnenrichtung. Die Farben zeigen die Leistungsklassen, die Länge den Anteil an Zeit oder Ertrag. Darunter liegt auf Wunsch ein Luftbild deines Hauses.
@@ -417,6 +417,7 @@ Die Standardbelegung: oben links die Leistung der gewählten Anlage, oben rechts
 | `corners` | siehe oben | Werte in den vier Ecken |
 | `areas` | – | markierte Flächen im Hausbild, siehe „Stränge im Hausbild markieren“ |
 | `area_labels` | `true` | Beschriftung auf den Flächen |
+| `area_toggle` | `true` | ▦-Knopf in der Karte zum Ein-/Ausblenden der Flächen (wird gemerkt) |
 | `area_summary` | `areas` | Summenzeile mit Leistung je Fläche und Gesamt: `areas` (nur Ansicht „Flächen“), `always` (alle Ansichten) oder `off` |
 
 ¹ Entfällt, wenn `sources` genutzt wird.
@@ -523,6 +524,7 @@ mode: single
 
 | Version | Änderungen |
 |---|---|
+| **1.18.0** | ▦-Knopf in der Karte zum Ein-/Ausblenden der Flächen im Hausbild (`area_toggle`) |
 | **1.17.0** | Neue Ansicht „Flächen“ (nur Stränge im Bild, ohne Balken); Summenzeile je Fläche + Gesamt (`area_summary`); Eckwert „Gesamtleistung aller Anlagen“ (`type: total`); verständlichere Hinweise bei den Flächen |
 | **1.16.0** | Flächen mit eigenem Strang-Sensor (`source`, W/kW automatisch) und Zuordnung zur Anlage (`system`, `kwp`); Anlagen aus mehreren Sensoren (`entities`); Sensor-IDs ohne „sensor.“ werden ergänzt |
 | **1.15.0** | Stränge im Hausbild markieren: drehbares Raster mit Pinsel/Radierer oder frei zeichnen; Flächen live nach Auslastung eingefärbt, ☀/☁ aus Ausrichtung, Antippen wählt die Anlage; optional Sensor je Modul |
