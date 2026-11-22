@@ -5,7 +5,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
 [![Validate](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml/badge.svg)](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml)
 ![Lizenz](https://img.shields.io/github/license/muhkuh666/helios-compass-card)
-![Version](https://img.shields.io/badge/version-1.13.0-orange.svg)
+![Version](https://img.shields.io/badge/version-1.14.0-orange.svg)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-muhkuh666-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/muhkuh666)
 
 **PV-Sonnenkompass für Home Assistant.** Die Karte zeigt, aus welcher Himmelsrichtung deine Solaranlage wie viel liefert. Jeder Sektor der Rose steht für eine Sonnenrichtung. Die Farben zeigen die Leistungsklassen, die Länge den Anteil an Zeit oder Ertrag. Darunter liegt auf Wunsch ein Luftbild deines Hauses.
@@ -26,11 +26,12 @@ Geeignet für Balkonkraftwerke, Dachanlagen und beides zusammen.
 ## Funktionen
 
 - **Solarrose:** 16-teilige Kompassrose (N, NNO, NO … NNW) mit Sektoren nach Sonnenrichtung, gestapelt nach Leistungsklassen.
-- **Fünf Ansichten** per Umschalter:
+- **Sechs Ansichten** per Umschalter:
   - **Leistung:** Leistungsverlauf als Punkte und Linie (Winkel = Sonnenrichtung, Abstand = Leistung in W/kW) mit Punkt für die aktuelle Leistung.
   - **Zeit:** Wie lange kam die Sonne aus welcher Richtung?
   - **Ertrag:** Wie viel kWh kamen aus welcher Richtung?
   - **Ø Leistung:** Durchschnittsleistung je Richtung.
+  - **Uhr:** Heatmap nach Uhrzeit – Winkel = Uhrzeit, jeder Ring ein Tag (ab 9 Wochen eine Woche), Farbe = Ø Leistung. Zeigt Schatten zur gleichen Uhrzeit, Wettertage und Ausfälle.
   - **Schatten:** Verschattungskarte aus Richtung × Sonnenhöhe. Sie zeigt, bei welchem Sonnenstand Bäume oder Nachbarhäuser Schatten werfen.
 - **Sonnenbahnen:** die heutige Bahn mit Uhrzeiten, Auf- und Untergang sowie die Bahnen am längsten (21.6.) und kürzesten Tag (21.12.).
 - **Zeiträume:** **Heute** (ab Mitternacht), 1, 8, 12 und 24 Stunden, 7, 14 und 30 Tage, 1 Jahr, außerdem **Sommer** und **Winter** mit der jeweils anderen Jahreszeit als Vergleich.
@@ -114,7 +115,7 @@ Listen (Anlagen, Modulfelder, Farbstufen) lassen sich hinzufügen, entfernen und
 
 ---
 
-## Die fünf Ansichten
+## Die sechs Ansichten
 
 | Ansicht | Darstellung | Legende | Wofür? |
 |---|---|---|---|
@@ -122,6 +123,7 @@ Listen (Anlagen, Modulfelder, Farbstufen) lassen sich hinzufügen, entfernen und
 | **Zeit** | Anteil der Sonnenzeit aus dieser Richtung | Zeitanteil je Leistungsklasse | Wann steht die Sonne wo, und wie viel kommt dabei an? |
 | **Ertrag** | kWh aus dieser Richtung (oder Anteil in %, `energy_display`) | Ertragsanteil je Leistungsklasse | Aus welcher Richtung kommt meine Energie, z. B. heute? |
 | **Ø Leistung** | Durchschnittsleistung bei Sonne aus dieser Richtung | Zeitanteil je Leistungsklasse | Welche Richtung liefert im Schnitt am meisten? |
+| **Uhr** | Winkel = Uhrzeit (0 Uhr oben), Ring = Tag bzw. Woche (innen älter, außen neuer), Farbe = Ø Leistung, orange Linie = jetzt | Zeitanteil je Leistungsklasse | Wann am Tag gibt es Leistung, wann Schatten oder Ausfälle? Am besten mit 7 Tagen bis 1 Jahr. |
 | **Schatten** | Raster aus Richtung × Sonnenhöhe (Rand = Horizont, Mitte = Zenit), Farbe = Ø Leistung | Zeitanteil je Leistungsklasse | Bei welchem Sonnenstand gibt es Schatten? |
 
 Gezählt wird nur die Zeit, in der die Sonne über dem Horizont steht.
@@ -347,7 +349,7 @@ Die Standardbelegung: oben links die Leistung der gewählten Anlage, oben rechts
 | `sun_marker` | `arrow` | Sonnenmarker: `arrow`, `circle`, `sun`, `dot` oder `none` |
 | `sun_marker_position` | `edge` | `edge` (am Rand) oder `elevation` (auf Sonnenhöhe) |
 | `sun_marker_color` | `#f57c00` | Farbe des Sonnenmarkers |
-| `metric` | `time` | Standard-Ansicht: `power`, `time`, `energy`, `avg_power` oder `shading` |
+| `metric` | `time` | Standard-Ansicht: `power`, `time`, `energy`, `avg_power`, `shading` oder `clock` |
 | `show_metric_switch` | `true` | Umschalter Zeit / Ertrag / Ø Leistung / Schatten anzeigen |
 | `show_stats` | `true` | Kennzahlen-Zeile anzeigen |
 | `show_legend` | `true` | Farbskala anzeigen |
@@ -355,7 +357,7 @@ Die Standardbelegung: oben links die Leistung der gewählten Anlage, oben rechts
 | `season_overlay` | `true` | bei Sommer/Winter die andere Jahreszeit gestrichelt zeigen |
 | `show_sun_paths` | `true` | Sonnenbahnen einzeichnen (Standardzustand) |
 | `sun_path_toggle` | `true` | ☀-Knopf in der Karte zum Ein-/Ausblenden der Sonnenbahnen (wird gemerkt) |
-| `metrics` | alle fünf | angezeigte Ansichten im Umschalter: `power`, `time`, `energy`, `avg_power`, `shading` |
+| `metrics` | alle sechs | angezeigte Ansichten im Umschalter: `power`, `time`, `energy`, `avg_power`, `shading`, `clock` |
 | `sun_paths` | `[today, summer, winter]` | welche Bahnen: heute, 21.6., 21.12. |
 | `elevation_bands` | `9` | Schatten-Ansicht: Anzahl Höhenringe (9 = 10°) |
 | `default_range` | `8h` | Start-Zeitraum |
@@ -468,6 +470,7 @@ mode: single
 
 | Version | Änderungen |
 |---|---|
+| **1.14.0** | Neue Ansicht „Uhr“: Heatmap mit Uhrzeit als Winkel und Tagen/Wochen als Ringe, Linie für „jetzt“ |
 | **1.13.0** | %-Knopf in der Karte zum Ein-/Ausblenden der Balkenwerte (`label_toggle`); kompakterer Umschalter; Anzeige „1,00 kWh“ statt „1.000 Wh“ |
 | **1.12.0** | Werte an den Balkenspitzen einblendbar (`sector_labels`, `sector_labels_min`) |
 | **1.11.1** | Wartungsversion für die Aufnahme in den HACS-Store (Prüfung vollständig bestanden) |

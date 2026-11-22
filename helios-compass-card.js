@@ -4,7 +4,7 @@
  *
  * Installation: siehe README.md
  */
-const CARD_VERSION = '1.13.0';
+const CARD_VERSION = '1.14.0';
 
 /* ---------- Sprache / Language ---------- */
 let LANG = 'de';
@@ -23,6 +23,7 @@ const I18N = {
   de: {
     r_today: 'Heute', r_1h: '1 Std.', r_8h: '8 Std.', r_12h: '12 Std.', r_24h: '24 Std.', r_7d: '7 Tage', r_14d: '14 Tage', r_30d: '30 Tage',
     r_1y: '1 Jahr', r_summer: 'Sommer', r_winter: 'Winter', d_summer: 'Apr–Sep', d_winter: 'Okt–Mär',
+    m_clock: 'Uhr', note_clock: 'Uhr: Winkel = Uhrzeit, Ring = {unit} (innen älter, außen neuer), Farbe = Ø Leistung', u_day: 'Tag', u_week: 'Woche', kw: 'Woche ab', now_line: 'Jetzt {t}',
     m_power: 'Leistung', note_power: 'Leistung: Winkel = Sonnenrichtung, Abstand zur Mitte = Leistung', power_now: 'Jetzt: {p}',
     m_time: 'Zeit', m_energy: 'Ertrag', m_avg_power: 'Ø Leistung', m_shading: 'Schatten',
     lg_time: 'Zeitanteil je Leistungsklasse (Sonnenzeit)', lg_energy: 'Ertragsanteil je Leistungsklasse',
@@ -53,6 +54,7 @@ const I18N = {
   en: {
     r_today: 'Today', r_1h: '1 h', r_8h: '8 h', r_12h: '12 h', r_24h: '24 h', r_7d: '7 days', r_14d: '14 days', r_30d: '30 days',
     r_1y: '1 year', r_summer: 'Summer', r_winter: 'Winter', d_summer: 'Apr–Sep', d_winter: 'Oct–Mar',
+    m_clock: 'Clock', note_clock: 'Clock: angle = time of day, ring = {unit} (inside older, outside newer), color = avg power', u_day: 'day', u_week: 'week', kw: 'Week of', now_line: 'Now {t}',
     m_power: 'Power', note_power: 'Power: angle = sun direction, distance from center = power', power_now: 'Now: {p}',
     m_time: 'Time', m_energy: 'Yield', m_avg_power: 'Avg power', m_shading: 'Shading',
     lg_time: 'Share of sun time per power class', lg_energy: 'Share of yield per power class',
@@ -115,6 +117,7 @@ const METRICS = {
   energy: { get label() { return t('m_energy'); }, get legend() { return t('lg_energy'); } },
   avg_power: { get label() { return t('m_avg_power'); }, get legend() { return t('lg_time'); } },
   shading: { get label() { return t('m_shading'); }, get legend() { return t('lg_time'); } },
+  clock: { get label() { return t('m_clock'); }, get legend() { return t('lg_time'); } },
 };
 
 const SUN_PATHS = {
@@ -151,7 +154,7 @@ const DEFAULTS = {
   show_total: null, // null = automatisch bei mehreren Anlagen
   show_sun_paths: true,
   sun_path_toggle: true, // ☀-Knopf in der Karte zum Ein-/Ausblenden der Sonnenbahnen
-  metrics: ['power', 'time', 'energy', 'avg_power', 'shading'], // angezeigte Ansichten
+  metrics: ['power', 'time', 'energy', 'avg_power', 'shading', 'clock'], // angezeigte Ansichten
   sun_paths: ['today', 'summer', 'winter'],
   elevation_bands: 9, // Verschattungskarte: Anzahl Höhenringe (9 = 10°)
   season_overlay: true, // Sommer/Winter: andere Jahreszeit als Umriss
@@ -1024,6 +1027,11 @@ class HeliosCompassCard extends HTMLElement {
     const agg = this._aggregate();
     const metric = this._metric;
     const { n, width } = agg;
+    const isClock = metric === 'clock';
+    ['g.static', 'g.modules', 'g.paths', '.bgwrap'].forEach((sel) => {
+      const el = this.shadowRoot.querySelector(sel);
+      if (el) el.style.display = isClock ? 'none' : '';
+    });
 
     const arcPath = (a0, a1, r0, r1) => {
       const f = (v) => v.toFixed(2);
@@ -1043,6 +1051,11 @@ class HeliosCompassCard extends HTMLElement {
     const r = RANGES[this._range];
     const note = this.shadowRoot.querySelector('.note');
     if (note) note.textContent = '';
+
+    if (isClock) {
+      this._renderClock(agg, labelSvg, note);
+      return;
+    }
 
     if (metric === 'power') {
       // Leistungsverlauf: Winkel = Sonnenazimut, Abstand = Leistung
@@ -1291,6 +1304,84 @@ class HeliosCompassCard extends HTMLElement {
     this._renderError(agg);
   }
 
+  /** Uhr-Heatmap: Winkel = Uhrzeit, Ring = Tag bzw. Woche, Farbe = Ø Leistung */
+  _renderClock(agg, labelSvg, note) {
+    const c = this._config;
+    const R = this._R();
+    const stops = this._src().color_stops;
+    const r = RANGES[this._range];
+    const r0 = 26;
+    const series = this._series;
+    const end = Date.now();
+    const start = end - r.hours * 3600e3;
+    // Tage ab Mitternacht des ersten Tages
+    const first = new Date(start);
+    first.setHours(0, 0, 0, 0);
+    const dayIdx = new Map();
+    const dayStarts = [];
+    for (const d = new Date(first); d.getTime() <= end; d.setDate(d.getDate() + 1)) {
+      dayIdx.set(d.toDateString(), dayStarts.length);
+      dayStarts.push(new Date(d));
+    }
+    const weekly = dayStarts.length > 62;
+    const rings = weekly ? Math.ceil(dayStarts.length / 7) : dayStarts.length;
+    const slotMin = r.stats ? 60 : 15;
+    const slots = 1440 / slotMin;
+    const cells = new Map();
+    series.forEach((p) => {
+      const d = new Date(p.t);
+      const di = dayIdx.get(d.toDateString());
+      if (di === undefined) return;
+      const ring = weekly ? Math.floor(di / 7) : di;
+      const slot = Math.floor((d.getHours() * 60 + d.getMinutes()) / slotMin);
+      const key = ring * slots + slot;
+      const cell = cells.get(key) || { ring, slot, sum: 0, cnt: 0 };
+      cell.sum += p.v;
+      cell.cnt += 1;
+      cells.set(key, cell);
+    });
+    const rr = (i) => r0 + ((R - r0) * i) / Math.max(1, rings);
+    const xyM = (m, rad) => this._xy((m / 1440) * 360, rad);
+    const f = (v) => v.toFixed(2);
+    let svg = `<circle r="${((R + r0) / 2).toFixed(1)}" fill="none" stroke="var(--secondary-background-color, rgba(127,127,127,.12))" stroke-width="${(R - r0).toFixed(1)}"/>`;
+    const gapR = rings > 40 ? 0 : 0.5;
+    const fmtD = (dt) => dt.toLocaleDateString(LOCALE, { weekday: 'short', day: '2-digit', month: '2-digit' });
+    cells.forEach((cell) => {
+      const avg = cell.sum / cell.cnt;
+      if (!(avg >= 1)) return;
+      const m0 = cell.slot * slotMin;
+      const m1 = m0 + slotMin;
+      const ri = rr(cell.ring);
+      const ro = rr(cell.ring + 1) - gapR;
+      const [x1, y1] = xyM(m0, ro);
+      const [x2, y2] = xyM(m1, ro);
+      const [x3, y3] = xyM(m1, ri);
+      const [x4, y4] = xyM(m0, ri);
+      const ds = dayStarts[weekly ? cell.ring * 7 : cell.ring];
+      const when = weekly ? `${t('kw')} ${fmtD(ds)}` : fmtD(ds);
+      const hh = (m) => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+      svg += `<path class="wedge" d="M${f(x4)},${f(y4)} L${f(x1)},${f(y1)} A${f(ro)},${f(ro)} 0 0 1 ${f(x2)},${f(y2)} L${f(x3)},${f(y3)} A${f(ri)},${f(ri)} 0 0 0 ${f(x4)},${f(y4)} Z"
+        fill="${stops[this._bin(avg)].color}" opacity="${c.sector_opacity}"><title>${when}, ${hh(m0)}–${hh(m1)}: Ø ${fmtPower(avg)}</title></path>`;
+    });
+    for (let h = 0; h < 24; h += 3) {
+      const [x1, y1] = xyM(h * 60, r0 - 2);
+      const [x2, y2] = xyM(h * 60, R + 2);
+      svg += `<line x1="${f(x1)}" y1="${f(y1)}" x2="${f(x2)}" y2="${f(y2)}" stroke="rgba(46,160,120,.45)" stroke-width=".6"/>`;
+      const [lx, ly] = xyM(h * 60, R + 13);
+      svg += `<text x="${f(lx)}" y="${f(ly)}" font-size="${h % 6 === 0 ? 10 : 8}" fill="${h % 6 === 0 ? '#f5b400' : 'var(--secondary-text-color, #888)'}"
+        text-anchor="middle" dominant-baseline="central">${h}:00</text>`;
+    }
+    svg += `<circle r="${R}" fill="none" stroke="rgba(46,160,120,.55)" stroke-width="1"/><circle r="${r0}" fill="none" stroke="rgba(46,160,120,.4)" stroke-width=".6"/>`;
+    svg += `<text x="0" y="-3" font-size="8" text-anchor="middle" fill="var(--primary-text-color)">${esc(r.label)}</text>
+      <text x="0" y="7" font-size="6.5" text-anchor="middle" fill="var(--secondary-text-color)">${rings} × ${weekly ? t('u_week') : t('u_day')}</text>`;
+    this.shadowRoot.querySelector('g.trace').innerHTML = svg;
+    if (note) note.textContent = t('note_clock', { unit: weekly ? t('u_week') : t('u_day') });
+    this._clockGeom = { r0 };
+    this._legendShares(agg, 'time');
+    this._renderStats(agg);
+    this._renderError(agg);
+  }
+
   /** Beschriftung an der Spitze eines Balkens */
   _tipLabel(center, radius, text) {
     const [x, y] = this._xy(center, radius + 7);
@@ -1437,7 +1528,15 @@ class HeliosCompassCard extends HTMLElement {
     const tip = `<title>${t(atElev ? 'sun_now' : 'sun_tip', { a: a.toFixed(0), e: sun.elevation.toFixed(0) })}</title>`;
     const f = (v) => v.toFixed(1);
     let sunSvg = '';
-    const style = c.sun_marker || 'arrow';
+    const style = this._metric === 'clock' ? 'clock' : (c.sun_marker || 'arrow');
+    if (style === 'clock') {
+      const nowD = new Date();
+      const m = nowD.getHours() * 60 + nowD.getMinutes();
+      const [x1, y1] = this._xy((m / 1440) * 360, 24);
+      const [x2, y2] = this._xy((m / 1440) * 360, R + 5);
+      sunSvg = `<line x1="${f(x1)}" y1="${f(y1)}" x2="${f(x2)}" y2="${f(y2)}" stroke="${c.sun_marker_color || '#f57c00'}" stroke-width="1.8" stroke-linecap="round">
+        <title>${t('now_line', { t: nowD.toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit' }) })}</title></line>`;
+    }
     if (style === 'arrow') {
       const r0 = atElev ? rr : R + 3;
       const [tx, ty] = this._xy(a, r0);
@@ -1461,13 +1560,13 @@ class HeliosCompassCard extends HTMLElement {
         sunSvg = `<g ${glow}>${tip}${rays}<circle cx="${f(x)}" cy="${f(y)}" r="4.6" fill="${col}" stroke="#fff" stroke-width="1"/></g>`;
       }
     }
-    if (this._metric === 'power' && up && power > 0) {
+    if (style !== 'clock' && this._metric === 'power' && up && power > 0) {
       const max = src.max_power || c.max_power;
       const [px, py] = this._xy(a, Math.min(1, power / max) * R);
       sunSvg += `<circle cx="${f(px)}" cy="${f(py)}" r="5.5" fill="${src.color_stops[this._bin(power)].color}" stroke="#fff" stroke-width="2"
         filter="drop-shadow(0 0 2px rgba(0,0,0,.5))"><title>${t('power_now', { p: fmtPower(power) })}</title></circle>`;
     }
-    if (this._showPaths && up && !atElev) {
+    if (style !== 'clock' && this._showPaths && up && !atElev) {
       const [sx, sy] = this._xy(a, (1 - sun.elevation / 90) * R);
       sunSvg += `<circle cx="${f(sx)}" cy="${f(sy)}" r="5" fill="#ffc107" stroke="#fff" stroke-width="1.5"
         filter="drop-shadow(0 0 3px rgba(255,170,0,.9))"><title>${t('sun_now', { a: a.toFixed(0), e: sun.elevation.toFixed(0) })}</title></circle>`;
@@ -1641,13 +1740,15 @@ SECTIONS = [
       { name: 'metric', selector: { select: { mode: 'dropdown', options: [
         { value: 'power', label: L('Leistung (Verlauf als Punkte)', 'Power (history as dots)') },
         { value: 'time', label: L('Zeitanteil', 'Share of time') }, { value: 'energy', label: L('Ertrag', 'Yield') }, { value: 'avg_power', label: L('Ø Leistung', 'Avg power') },
-        { value: 'shading', label: L('Schatten (Richtung × Sonnenhöhe)', 'Shading (direction × sun elevation)') }] } } },
+        { value: 'shading', label: L('Schatten (Richtung × Sonnenhöhe)', 'Shading (direction × sun elevation)') },
+        { value: 'clock', label: L('Uhr (Uhrzeit × Tag)', 'Clock (time of day × day)') }] } } },
       { name: 'default_range', selector: { select: { mode: 'dropdown', options: RANGE_OPTIONS } } },
     ] },
     { name: 'metrics', selector: { select: { multiple: true, mode: 'list', options: [
       { value: 'power', label: L('Leistung', 'Power') },
       { value: 'time', label: L('Zeit', 'Time') }, { value: 'energy', label: L('Ertrag', 'Yield') }, { value: 'avg_power', label: L('Ø Leistung', 'Avg power') },
-      { value: 'shading', label: L('Schatten (Verschattungskarte)', 'Shading (shading map)') }] } } },
+      { value: 'shading', label: L('Schatten (Verschattungskarte)', 'Shading (shading map)') },
+      { value: 'clock', label: L('Uhr (Heatmap nach Uhrzeit)', 'Clock (heatmap by time of day)') }] } } },
     { name: 'ranges', selector: { select: { multiple: true, mode: 'list', options: RANGE_OPTIONS } } },
     { name: 'power_style', selector: { select: { mode: 'dropdown', options: [
       { value: 'both', label: L('Linie mit Punkten', 'Line with dots') }, { value: 'line', label: L('Nur Linie', 'Line only') },

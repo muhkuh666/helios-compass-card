@@ -5,7 +5,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
 [![Validate](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml/badge.svg)](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml)
 ![License](https://img.shields.io/github/license/muhkuh666/helios-compass-card)
-![Version](https://img.shields.io/badge/version-1.13.0-orange.svg)
+![Version](https://img.shields.io/badge/version-1.14.0-orange.svg)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-muhkuh666-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/muhkuh666)
 
 **A solar compass for Home Assistant.** This card shows which compass direction your solar system gets its power from. Each sector of the rose is a sun direction. Colors show power classes, and the sector length shows the share of time or yield. An aerial image of your house can sit underneath.
@@ -26,11 +26,12 @@ Works for balcony solar systems, rooftop systems, or both at once.
 ## Features
 
 - **Solar rose:** a 16-point compass rose (N, NNE, NE … NNW) with sectors by sun direction, stacked by power class.
-- **Five views** you can switch between:
+- **Six views** you can switch between:
   - **Power:** power history as dots and line (angle = sun direction, distance = power in W/kW) with a dot for the current power.
   - **Time:** how long the sun came from each direction.
   - **Yield:** how many kWh came from each direction.
   - **Avg power:** average power per direction.
+  - **Clock:** heatmap by time of day – angle = time, each ring a day (a week from 9 weeks on), color = avg power. Shows shade at the same time every day, weather days and outages.
   - **Shading:** a shading map of direction × sun elevation. It shows at which sun positions trees or neighboring buildings cast shade.
 - **Sun paths:** today's path with times, sunrise and sunset, plus the paths on the longest day (Jun 21) and the shortest day (Dec 21).
 - **Periods:** **Today** (since midnight), 1, 8, 12 and 24 hours, 7, 14 and 30 days, 1 year, plus **Summer** and **Winter**, each compared with the other season.
@@ -114,7 +115,7 @@ You can add, remove and reorder lists (systems, arrays, color steps) with ↑ �
 
 ---
 
-## The five views
+## The six views
 
 | View | Display | Legend | What for? |
 |---|---|---|---|
@@ -122,6 +123,7 @@ You can add, remove and reorder lists (systems, arrays, color steps) with ↑ �
 | **Time** | share of sun time from this direction | share of time per power class | Where is the sun when, and how much do you get then? |
 | **Yield** | kWh from this direction (or share in %, `energy_display`) | share of yield per power class | Where does your energy come from, e.g. today? |
 | **Avg power** | average power with sun from this direction | share of time per power class | Which direction delivers the most on average? |
+| **Clock** | angle = time of day (midnight at the top), ring = day or week (inside older, outside newer), color = avg power, orange line = now | share of time per power class | When during the day is there power, shade or an outage? Best with 7 days to 1 year. |
 | **Shading** | grid of direction × sun elevation (edge = horizon, center = zenith), color = avg power | share of time per power class | At which sun positions is there shade? |
 
 Only the time when the sun is above the horizon counts.
@@ -347,9 +349,9 @@ Defaults: top left shows the power of the selected system, top right the sun azi
 | `sun_marker` | `arrow` | sun marker: `arrow`, `circle`, `sun`, `dot` or `none` |
 | `sun_marker_position` | `edge` | `edge` or `elevation` (at sun elevation) |
 | `sun_marker_color` | `#f57c00` | sun marker color |
-| `metric` | `time` | default view: `power`, `time`, `energy`, `avg_power` or `shading` |
+| `metric` | `time` | default view: `power`, `time`, `energy`, `avg_power`, `shading` or `clock` |
 | `show_metric_switch` | `true` | show the view switch |
-| `metrics` | all five | views in the switch: `power`, `time`, `energy`, `avg_power`, `shading` |
+| `metrics` | all six | views in the switch: `power`, `time`, `energy`, `avg_power`, `shading`, `clock` |
 | `show_stats` | `true` | show the key figures |
 | `show_legend` | `true` | show the color scale |
 | `ranges` | all | visible period buttons: `today`, `1h`, `8h`, `12h`, `24h`, `7d`, `14d`, `30d`, `1y`, `summer`, `winter` |
@@ -467,6 +469,7 @@ mode: single
 
 | Version | Changes |
 |---|---|
+| **1.14.0** | New “Clock” view: heatmap with time of day as angle and days/weeks as rings, line for “now” |
 | **1.13.0** | % button on the card to show/hide bar values (`label_toggle`); more compact view switch; shows “1.00 kWh” instead of “1,000 Wh” |
 | **1.12.0** | Values at the bar tips (`sector_labels`, `sector_labels_min`) |
 | **1.11.1** | Maintenance release for inclusion in the HACS store (all checks passed) |
