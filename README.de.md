@@ -5,7 +5,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
 [![Validate](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml/badge.svg)](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml)
 ![Lizenz](https://img.shields.io/github/license/muhkuh666/helios-compass-card)
-![Version](https://img.shields.io/badge/version-1.16.0-orange.svg)
+![Version](https://img.shields.io/badge/version-1.17.0-orange.svg)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-muhkuh666-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/muhkuh666)
 
 **PV-Sonnenkompass für Home Assistant.** Die Karte zeigt, aus welcher Himmelsrichtung deine Solaranlage wie viel liefert. Jeder Sektor der Rose steht für eine Sonnenrichtung. Die Farben zeigen die Leistungsklassen, die Länge den Anteil an Zeit oder Ertrag. Darunter liegt auf Wunsch ein Luftbild deines Hauses.
@@ -26,7 +26,8 @@ Geeignet für Balkonkraftwerke, Dachanlagen und beides zusammen.
 ## Funktionen
 
 - **Solarrose:** 16-teilige Kompassrose (N, NNO, NO … NNW) mit Sektoren nach Sonnenrichtung, gestapelt nach Leistungsklassen.
-- **Sechs Ansichten** per Umschalter:
+- **Sieben Ansichten** per Umschalter:
+  - **Flächen:** nur das Hausbild mit deinen markierten Strängen, ohne Balken – mit großer Beschriftung und Summenzeile (erscheint, sobald Flächen markiert sind).
   - **Leistung:** Leistungsverlauf als Punkte und Linie (Winkel = Sonnenrichtung, Abstand = Leistung in W/kW) mit Punkt für die aktuelle Leistung.
   - **Zeit:** Wie lange kam die Sonne aus welcher Richtung?
   - **Ertrag:** Wie viel kWh kamen aus welcher Richtung?
@@ -360,6 +361,7 @@ corners:
 | Typ | Anzeige |
 |---|---|
 | `type: source` | Leistung der gewählten Anlage (bei „Gesamt“ die Summe) |
+| `type: total` | Gesamtleistung aller Anlagen (immer die Summe) |
 | `type: utilization` | Auslastung der gewählten Anlage in % |
 | `type: energy_today` | Ertrag heute der gewählten Anlage (braucht `energy_entity`) |
 | `entity: …` | beliebige Entität, optional mit `unit` und `decimals` |
@@ -396,7 +398,7 @@ Die Standardbelegung: oben links die Leistung der gewählten Anlage, oben rechts
 | `sun_marker` | `arrow` | Sonnenmarker: `arrow`, `circle`, `sun`, `dot` oder `none` |
 | `sun_marker_position` | `edge` | `edge` (am Rand) oder `elevation` (auf Sonnenhöhe) |
 | `sun_marker_color` | `#f57c00` | Farbe des Sonnenmarkers |
-| `metric` | `time` | Standard-Ansicht: `power`, `time`, `energy`, `avg_power`, `shading` oder `clock` |
+| `metric` | `time` | Standard-Ansicht: `areas`, `power`, `time`, `energy`, `avg_power`, `shading` oder `clock` |
 | `show_metric_switch` | `true` | Umschalter Zeit / Ertrag / Ø Leistung / Schatten anzeigen |
 | `show_stats` | `true` | Kennzahlen-Zeile anzeigen |
 | `show_legend` | `true` | Farbskala anzeigen |
@@ -404,7 +406,7 @@ Die Standardbelegung: oben links die Leistung der gewählten Anlage, oben rechts
 | `season_overlay` | `true` | bei Sommer/Winter die andere Jahreszeit gestrichelt zeigen |
 | `show_sun_paths` | `true` | Sonnenbahnen einzeichnen (Standardzustand) |
 | `sun_path_toggle` | `true` | ☀-Knopf in der Karte zum Ein-/Ausblenden der Sonnenbahnen (wird gemerkt) |
-| `metrics` | alle sechs | angezeigte Ansichten im Umschalter: `power`, `time`, `energy`, `avg_power`, `shading`, `clock` |
+| `metrics` | alle | angezeigte Ansichten im Umschalter: `areas`, `power`, `time`, `energy`, `avg_power`, `shading`, `clock` |
 | `sun_paths` | `[today, summer, winter]` | welche Bahnen: heute, 21.6., 21.12. |
 | `elevation_bands` | `9` | Schatten-Ansicht: Anzahl Höhenringe (9 = 10°) |
 | `default_range` | `8h` | Start-Zeitraum |
@@ -415,6 +417,7 @@ Die Standardbelegung: oben links die Leistung der gewählten Anlage, oben rechts
 | `corners` | siehe oben | Werte in den vier Ecken |
 | `areas` | – | markierte Flächen im Hausbild, siehe „Stränge im Hausbild markieren“ |
 | `area_labels` | `true` | Beschriftung auf den Flächen |
+| `area_summary` | `areas` | Summenzeile mit Leistung je Fläche und Gesamt: `areas` (nur Ansicht „Flächen“), `always` (alle Ansichten) oder `off` |
 
 ¹ Entfällt, wenn `sources` genutzt wird.
 
@@ -520,6 +523,7 @@ mode: single
 
 | Version | Änderungen |
 |---|---|
+| **1.17.0** | Neue Ansicht „Flächen“ (nur Stränge im Bild, ohne Balken); Summenzeile je Fläche + Gesamt (`area_summary`); Eckwert „Gesamtleistung aller Anlagen“ (`type: total`); verständlichere Hinweise bei den Flächen |
 | **1.16.0** | Flächen mit eigenem Strang-Sensor (`source`, W/kW automatisch) und Zuordnung zur Anlage (`system`, `kwp`); Anlagen aus mehreren Sensoren (`entities`); Sensor-IDs ohne „sensor.“ werden ergänzt |
 | **1.15.0** | Stränge im Hausbild markieren: drehbares Raster mit Pinsel/Radierer oder frei zeichnen; Flächen live nach Auslastung eingefärbt, ☀/☁ aus Ausrichtung, Antippen wählt die Anlage; optional Sensor je Modul |
 | **1.14.0** | Neue Ansicht „Uhr“: Heatmap mit Uhrzeit als Winkel und Tagen/Wochen als Ringe, Linie für „jetzt“ |

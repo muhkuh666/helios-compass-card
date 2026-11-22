@@ -5,7 +5,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
 [![Validate](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml/badge.svg)](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml)
 ![License](https://img.shields.io/github/license/muhkuh666/helios-compass-card)
-![Version](https://img.shields.io/badge/version-1.16.0-orange.svg)
+![Version](https://img.shields.io/badge/version-1.17.0-orange.svg)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-muhkuh666-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/muhkuh666)
 
 **A solar compass for Home Assistant.** This card shows which compass direction your solar system gets its power from. Each sector of the rose is a sun direction. Colors show power classes, and the sector length shows the share of time or yield. An aerial image of your house can sit underneath.
@@ -26,7 +26,8 @@ Works for balcony solar systems, rooftop systems, or both at once.
 ## Features
 
 - **Solar rose:** a 16-point compass rose (N, NNE, NE … NNW) with sectors by sun direction, stacked by power class.
-- **Six views** you can switch between:
+- **Seven views** you can switch between:
+  - **Areas:** only the house image with your marked strings, no bars – with large labels and a summary row (appears once areas are marked).
   - **Power:** power history as dots and line (angle = sun direction, distance = power in W/kW) with a dot for the current power.
   - **Time:** how long the sun came from each direction.
   - **Yield:** how many kWh came from each direction.
@@ -360,6 +361,7 @@ corners:
 | Type | Shows |
 |---|---|
 | `type: source` | power of the selected system (sum for “Total”) |
+| `type: total` | total power of all systems (always the sum) |
 | `type: utilization` | utilization of the selected system in % |
 | `type: energy_today` | yield today of the selected system (needs `energy_entity`) |
 | `entity: …` | any entity, optionally with `unit` and `decimals` |
@@ -396,9 +398,9 @@ Defaults: top left shows the power of the selected system, top right the sun azi
 | `sun_marker` | `arrow` | sun marker: `arrow`, `circle`, `sun`, `dot` or `none` |
 | `sun_marker_position` | `edge` | `edge` or `elevation` (at sun elevation) |
 | `sun_marker_color` | `#f57c00` | sun marker color |
-| `metric` | `time` | default view: `power`, `time`, `energy`, `avg_power`, `shading` or `clock` |
+| `metric` | `time` | default view: `areas`, `power`, `time`, `energy`, `avg_power`, `shading` or `clock` |
 | `show_metric_switch` | `true` | show the view switch |
-| `metrics` | all six | views in the switch: `power`, `time`, `energy`, `avg_power`, `shading`, `clock` |
+| `metrics` | all | views in the switch: `areas`, `power`, `time`, `energy`, `avg_power`, `shading`, `clock` |
 | `show_stats` | `true` | show the key figures |
 | `show_legend` | `true` | show the color scale |
 | `ranges` | all | visible period buttons: `today`, `1h`, `8h`, `12h`, `24h`, `7d`, `14d`, `30d`, `1y`, `summer`, `winter` |
@@ -415,6 +417,7 @@ Defaults: top left shows the power of the selected system, top right the sun azi
 | `corners` | see above | values in the four corners |
 | `areas` | – | marked areas in the house image, see “Marking strings in the house image” |
 | `area_labels` | `true` | labels on the areas |
+| `area_summary` | `areas` | summary row with power per area and total: `areas` (only in the “Areas” view), `always` (all views) or `off` |
 
 ¹ Not needed when you use `sources`.
 
@@ -519,6 +522,7 @@ mode: single
 
 | Version | Changes |
 |---|---|
+| **1.17.0** | New “Areas” view (strings in the image only, no bars); summary row per area + total (`area_summary`); corner value “Total power of all systems” (`type: total`); clearer hints for areas |
 | **1.16.0** | Areas with their own string sensor (`source`, W/kW automatic) linked to a system (`system`, `kwp`); systems made of several sensors (`entities`); entity IDs without “sensor.” are completed |
 | **1.15.0** | Mark strings in the house image: rotatable grid with brush/eraser or free drawing; areas colored live by utilization, ☀/☁ from orientation, tapping selects the system; optional sensor per panel |
 | **1.14.0** | New “Clock” view: heatmap with time of day as angle and days/weeks as rings, line for “now” |
