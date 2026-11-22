@@ -5,7 +5,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
 [![Validate](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml/badge.svg)](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml)
 ![License](https://img.shields.io/github/license/muhkuh666/helios-compass-card)
-![Version](https://img.shields.io/badge/version-1.14.0-orange.svg)
+![Version](https://img.shields.io/badge/version-1.15.0-orange.svg)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-muhkuh666-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/muhkuh666)
 
 **A solar compass for Home Assistant.** This card shows which compass direction your solar system gets its power from. Each sector of the rose is a sun direction. Colors show power classes, and the sector length shows the share of time or yield. An aerial image of your house can sit underneath.
@@ -42,6 +42,7 @@ Works for balcony solar systems, rooftop systems, or both at once.
 - **Utilization in %:** per system and in total, as a row with bars and as a corner value.
 - **Key figures:** yield for the period, peak power with time and direction, best direction.
 - **Panel orientation:** dashed arrows with name and tilt for each array.
+- **Mark strings in the image:** panel areas via a rotatable grid or free drawing, colored live by utilization, with ☀/☁ and optionally one sensor per panel.
 - **House image (optional):** rotate, move, scale and crop to a circle.
 - **Live values:** sun marker as arrow, circle, sun symbol or dot, at the edge or at sun elevation, sun azimuth, sun elevation and current power in the corners.
 - **Legend:** share per power class. The class of the current power is outlined.
@@ -105,6 +106,7 @@ The editor is split into sections. The preview updates with every change.
 | ⚙️ **General** | title, PV sensor, maximum power, color scale label, kWp, energy meter |
 | 🧭 **Display** | default view, default period, visible views and period buttons, summer/winter comparison, sun paths, number and opacity of sectors, elevation rings of the shading view, show/hide switch, key figures and color scale |
 | 🏠 **House image** | image path, rotation, offset, size, opacity, circular crop |
+| 🟩 **Areas in the image** | mark strings/panels on the aerial image: grid with rotation, size, brush, eraser and panel sensor, or free drawing |
 | 🔲 **Corner values** | per corner: power of the selected system, yield today, any entity (with unit and decimals), sun azimuth, sun elevation or hidden |
 | 🔆 **Systems** | several sensors with kWp, energy meters, their own arrays and power classes, sum “Total”, default system |
 | 📐 **Panel orientation** | arrays for all systems: name, color, azimuth, tilt, kWp |
@@ -156,6 +158,47 @@ You can remove the **Shading** view (or any other) from the switch with `metrics
 ```yaml
 metrics: [time, energy, avg_power]
 ```
+
+---
+
+## Marking strings in the house image
+
+Under **🟩 Areas in the image** you mark each string and the balcony system directly on your aerial image. The card then colors the areas **live**:
+
+- **Color strength = utilization:** a string at 65 % glows brightly, one at 10 % only faintly.
+- **☀ / ☁:** with the area's azimuth and tilt, the card knows whether the sun currently hits it directly. If the sun is behind it, the outline is dashed.
+- **Label** with name, power and utilization (can be turned off).
+- **Tapping** an area selects the matching system in the switch.
+
+**How to mark (recommended: grid)**
+1. **Add area**, choose name and color and assign the **system / sensor**.
+2. Click **🖌 Mark in image**.
+3. Set the **grid rotation** so the lines run parallel to the panel rows. Set **panel width/height** to one panel and **move** the grid until it sits on the panels.
+4. Click or brush over the panels with the **brush**. **Erase** removes them again.
+5. Each area has its **own grid**, e.g. roof and garage with different orientations.
+
+Alternatively: **✎ Free drawing**. Click the corners, drag points to move them, right-click deletes. Separate panel groups become **parts**.
+
+**Panel sensors:** if each panel has its own sensor (micro-inverters, optimizers), pick the **🔌 Panel sensor** brush, choose a sensor and click the panel. The panel then glows individually by its own power.
+
+```yaml
+areas:
+  - name: String 1
+    source: sensor.pv1_power         # sensor of a system or "total"
+    color: "#f05a28"
+    azimuth: 110                     # optional, for ☀/☁
+    tilt: 35
+    grid: {rotation: 21, x: 37.2, y: 26.7, w: 3.46, h: 6.64, cells: [[0,0],[1,0],[2,0]]}
+    cell_sensors: {"0,0": sensor.panel_1}   # optional
+  - name: Balcony
+    source: sensor.balcony_power
+    color: "#22c55e"
+    polygons:
+      - [[4.0,43.6],[13.3,46.2],[12.7,50.8],[3.5,48.2]]
+area_labels: true
+```
+
+Coordinates refer to the image (0–100 = image width). If you rotate, move or scale the house image, the areas move with it. The areas are hidden in the “Clock” view.
 
 ---
 
@@ -366,6 +409,8 @@ Defaults: top left shows the power of the selected system, top right the sun azi
 | `color_stops` | 9 steps up to `max_power` | list of `{value, color}` |
 | `modules` | – | arrays for all systems |
 | `corners` | see above | values in the four corners |
+| `areas` | – | marked areas in the house image, see “Marking strings in the house image” |
+| `area_labels` | `true` | labels on the areas |
 
 ¹ Not needed when you use `sources`.
 
@@ -469,6 +514,7 @@ mode: single
 
 | Version | Changes |
 |---|---|
+| **1.15.0** | Mark strings in the house image: rotatable grid with brush/eraser or free drawing; areas colored live by utilization, ☀/☁ from orientation, tapping selects the system; optional sensor per panel |
 | **1.14.0** | New “Clock” view: heatmap with time of day as angle and days/weeks as rings, line for “now” |
 | **1.13.0** | % button on the card to show/hide bar values (`label_toggle`); more compact view switch; shows “1.00 kWh” instead of “1,000 Wh” |
 | **1.12.0** | Values at the bar tips (`sector_labels`, `sector_labels_min`) |

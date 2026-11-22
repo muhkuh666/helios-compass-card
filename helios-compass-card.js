@@ -4,7 +4,7 @@
  *
  * Installation: siehe README.md
  */
-const CARD_VERSION = '1.14.0';
+const CARD_VERSION = '1.15.0';
 
 /* ---------- Sprache / Language ---------- */
 let LANG = 'de';
@@ -49,7 +49,7 @@ const I18N = {
     sun_tip: 'Sonne: Azimut {a}°, Höhe {e}°', sun_now: 'Sonne jetzt: Azimut {a}°, Höhe {e}°',
     array: 'Modulfeld', azimuth: 'Azimut',
     card_desc: 'Sonnenrichtung, PV-Leistung und Ertrag über dem Luftbild des Hauses',
-    utilization: 'Auslastung', util_of: '{name} Auslastung', util_tip: '{p} von {b} ({pct} %)',
+    utilization: 'Auslastung', modules_n: 'Module', util_of: '{name} Auslastung', util_tip: '{p} von {b} ({pct} %)',
   },
   en: {
     r_today: 'Today', r_1h: '1 h', r_8h: '8 h', r_12h: '12 h', r_24h: '24 h', r_7d: '7 days', r_14d: '14 days', r_30d: '30 days',
@@ -80,7 +80,7 @@ const I18N = {
     sun_tip: 'Sun: azimuth {a}°, elevation {e}°', sun_now: 'Sun now: azimuth {a}°, elevation {e}°',
     array: 'Array', azimuth: 'Azimuth',
     card_desc: 'Sun direction, PV power and yield over an aerial image of your house',
-    utilization: 'Utilization', util_of: '{name} utilization', util_tip: '{p} of {b} ({pct} %)',
+    utilization: 'Utilization', modules_n: 'modules', util_of: '{name} utilization', util_tip: '{p} of {b} ({pct} %)',
   },
 };
 const t = (k, v = {}) => String(I18N[LANG][k] ?? I18N.de[k] ?? k).replace(/\{(\w+)\}/g, (_, n) => (v[n] ?? ''));
@@ -169,7 +169,9 @@ const DEFAULTS = {
   power_style: 'both', // Ansicht Leistung: 'both' | 'line' | 'dots' | 'area' | 'bars'
   sector_labels: false, // Werte an den Balkenspitzen anzeigen
   sector_labels_min: 20,
-  label_toggle: true, // %-Knopf in der Karte zum Ein-/Ausblenden der Balkenwerte // nur Balken ab x % des größten Balkens beschriften
+  label_toggle: true,
+  areas: [], // markierte Modulflächen im Hausbild (Raster und/oder Polygone)
+  area_labels: true, // Beschriftung der Flächen // %-Knopf in der Karte zum Ein-/Ausblenden der Balkenwerte // nur Balken ab x % des größten Balkens beschriften
   energy_display: 'absolute', // Ansicht Ertrag: 'absolute' (kWh je Richtung) | 'percent'
   get total_name() { return t('total'); },
   language: 'auto', // 'auto' | 'de' | 'en'
@@ -241,6 +243,30 @@ function fmtP(w, unit = POWER_UNIT, sep = ' ', dec) {
 }
 const fmtPower = (w) => fmtP(w);
 const fmtEnergy = (wh) => (Math.round(wh) >= 1000 ? `${fmtNum(wh / 1000, wh >= 100000 ? 0 : wh >= 10000 ? 1 : 2)} kWh` : `${fmtNum(wh)} Wh`);
+
+/** Raster-Zellen und freie Polygone einer Fläche in Bildkoordinaten */
+function gridCell(grid, i, j) {
+  const r = ((Number(grid.rotation) || 0) * Math.PI) / 180;
+  const ux = [Math.cos(r), Math.sin(r)];
+  const uy = [-Math.sin(r), Math.cos(r)];
+  const w = Number(grid.w) || 5;
+  const h = Number(grid.h) || 8;
+  const x0 = Number(grid.x) || 0;
+  const y0 = Number(grid.y) || 0;
+  const P = (a, b) => [x0 + a * w * ux[0] + b * h * uy[0], y0 + a * w * ux[1] + b * h * uy[1]];
+  return [P(i, j), P(i + 1, j), P(i + 1, j + 1), P(i, j + 1)];
+}
+function areaShapes(area) {
+  const out = [];
+  if (area.grid && Array.isArray(area.grid.cells)) {
+    area.grid.cells.forEach((cell) => {
+      const [i, j] = Array.isArray(cell) ? cell : String(cell).split(',').map(Number);
+      if (isFinite(i) && isFinite(j)) out.push({ key: `${i},${j}`, pts: gridCell(area.grid, i, j) });
+    });
+  }
+  (area.polygons || []).forEach((pg) => { if (Array.isArray(pg) && pg.length > 2) out.push({ pts: pg }); });
+  return out;
+}
 
 class HeliosCompassCard extends HTMLElement {
   constructor() {
@@ -317,6 +343,8 @@ class HeliosCompassCard extends HTMLElement {
     }
     c.power_entity = c.sources[0].entities[0];
     c.corners = { ...defaultCorners(), ...(config.corners || {}) };
+    c.areas = (Array.isArray(config.areas) ? config.areas : [])
+      .filter((a) => a && ((a.grid && Array.isArray(a.grid.cells) && a.grid.cells.length) || (Array.isArray(a.polygons) && a.polygons.some((pg) => Array.isArray(pg) && pg.length > 2))));
     // Alte Konfigurationen: Ecke oben links war fest auf den ersten Sensor gestellt
     // (z. B. {entity: sensor.bkw, name: 'BKW-Leistung'}). Bei mehreren Anlagen soll sie der Auswahl folgen.
     const tl = c.corners.top_left;
@@ -670,7 +698,10 @@ class HeliosCompassCard extends HTMLElement {
         .util .u b { color: var(--primary-text-color); font-weight:500; }
         .util .u.active { border-color: var(--primary-color, #03a9f4); }
         .plot { position:relative; width:100%; max-width:420px; margin:0 auto; aspect-ratio: 1 / 1.02; }
-        svg.rose { position:absolute; inset:0; width:100%; height:100%; overflow:visible; }
+        svg.rose { position:absolute; inset:0; width:100%; height:100%; overflow:visible; pointer-events:none; }
+        svg.rose g.trace *, svg.rose g.paths *, svg.rose g.modules *, svg.rose g.sun * { pointer-events:auto; }
+        svg.rose g.areas .area { pointer-events:auto; cursor:pointer; }
+        svg.rose g.areas .area:hover polygon { fill-opacity:.75; }
         /* Hausbild als HTML-Ebene unter dem Kompass (funktioniert auch in der Companion-App) */
         .bgwrap { position:absolute; left:50%; top:50%; width:${(2 * 108 / 320) * 100}%; aspect-ratio:1/1;
                   transform:translate(-50%,-50%); pointer-events:none; }
@@ -726,7 +757,7 @@ class HeliosCompassCard extends HTMLElement {
         <div class="plot">
           ${c.image ? '<div class="bgwrap"><img class="bg" alt="" decoding="async"></div>' : ''}
           <svg class="rose" viewBox="-160 -160 320 320" preserveAspectRatio="xMidYMid meet">
-            <g class="static"></g><g class="trace"></g><g class="paths"></g><g class="modules"></g><g class="sun"></g>
+            <g class="static"></g><g class="areas"></g><g class="trace"></g><g class="paths"></g><g class="modules"></g><g class="sun"></g>
           </svg>
           ${corner('top_left')}${corner('top_right')}${corner('bottom_left')}${corner('bottom_right')}
         </div>
@@ -873,8 +904,123 @@ class HeliosCompassCard extends HTMLElement {
         + (/^https?:\/\/(192\.168|10\.|172\.|[^/]*\.local)/.test(c.image) ? t('img_hint') : '');
       this._renderError();
     };
-    img.onload = () => { if (this._imageError) { this._imageError = null; this._renderError(); } };
+    img.onload = () => {
+      if (img.naturalWidth) this._imgAR = img.naturalHeight / img.naturalWidth;
+      if (this._imageError) { this._imageError = null; this._renderError(); }
+      this._renderAreas();
+    };
     if (img.getAttribute('src') !== url) img.setAttribute('src', url);
+  }
+
+  /* ---------- Flächen im Hausbild ---------- */
+  /** Abbildung Bildkoordinaten (u: 0–100 der Breite, v: 0–100·H/B) → SVG-Koordinaten der Rose */
+  _areaMap() {
+    const c = this._config;
+    const R = this._R();
+    const S = 2 * R * Number(c.image_scale || 0.8);
+    const ar = this._imgAR || 1;
+    const Wi = ar <= 1 ? S : S / ar;
+    const Hi = Wi * ar;
+    const k = Wi / 100;
+    const dx = ((Number(c.image_offset_x) || 0) / 100) * R;
+    const dy = (-(Number(c.image_offset_y) || 0) / 100) * R;
+    const rot = ((Number(c.image_rotation) || 0) * Math.PI) / 180;
+    const pt = (u, v) => {
+      const lx = u * k - Wi / 2;
+      const ly = v * k - Hi / 2;
+      return [lx * Math.cos(rot) - ly * Math.sin(rot) + dx, lx * Math.sin(rot) + ly * Math.cos(rot) + dy];
+    };
+    return { pt, k };
+  }
+
+  _areaSource(area) {
+    const srcs = this._config.sources;
+    if (area.source === 'total') return srcs.find((x) => x.total) || null;
+    return srcs.find((x) => !x.total && (x.id === area.source || x.entities.includes(area.source))) || null;
+  }
+
+  _areaSun(area, src) {
+    const sun = this._sunNow();
+    if (sun.elevation <= 0) return false;
+    const mod = (area.azimuth !== undefined && area.azimuth !== null && area.azimuth !== '')
+      ? { azimuth: area.azimuth, tilt: area.tilt ?? 30 } : src?.modules?.[0];
+    if (!mod) return null;
+    const d2r = Math.PI / 180;
+    const tilt = Number(mod.tilt ?? 30) * d2r;
+    const inc = Math.cos(sun.elevation * d2r) * Math.sin(tilt) * Math.cos((sun.azimuth - Number(mod.azimuth)) * d2r)
+      + Math.sin(sun.elevation * d2r) * Math.cos(tilt);
+    return inc > 0.05;
+  }
+
+  _renderAreas() {
+    const c = this._config;
+    const g = this.shadowRoot.querySelector('g.areas');
+    if (!g) return;
+    if (!c.image || !c.areas.length || !this._imgAR) { g.innerHTML = ''; return; }
+    const { pt, k } = this._areaMap();
+    const f = (v) => v.toFixed(2);
+    let svg = '';
+    let labels = '';
+    c.areas.forEach((area, ai) => {
+      const src = this._areaSource(area);
+      const col = area.color || '#f5a623';
+      const power = src ? this._livePower(src) : null;
+      const base = src ? this._utilBase(src) : 0;
+      const util = src && base > 0 ? (power / base) * 100 : null;
+      const lit = this._areaSun(area, src);
+      const sel = src && src.id === this._sourceId;
+      const shapes = areaShapes(area);
+      const cellCount = shapes.filter((x) => x.key).length;
+      const modWp = Number(area.module_wp) || (base > 0 && cellCount ? base / cellCount : 0);
+      const baseOp = util === null ? 0.35 : 0.12 + 0.6 * Math.min(1, Math.max(0, util / 100));
+      const name = area.name || src?.name || area.source || '';
+      const tip = `${name}${power !== null ? ` · ${fmtPower(power)}` : ''}${util !== null ? ` · ${fmtNum(util, util < 10 ? 1 : 0)} %` : ''}`
+        + `${lit === true ? ' · ☀' : lit === false ? ' · ☁' : ''}${cellCount ? ` · ${cellCount} ${t('modules_n')}` : ''}`;
+      let polys = '';
+      shapes.forEach((sh) => {
+        let op = baseOp;
+        let cellTip = '';
+        const ent = sh.key && area.cell_sensors ? area.cell_sensors[sh.key] : null;
+        if (ent) {
+          const st = this._hass.states[ent];
+          const pw = (parseFloat(st?.state) || 0) * this._factor(ent);
+          op = modWp > 0 ? 0.12 + 0.75 * Math.min(1, pw / modWp) : baseOp;
+          cellTip = `\n${st?.attributes.friendly_name || ent}: ${fmtPower(pw)}`;
+        }
+        const pts = sh.pts.map(([u, v]) => pt(u, v).map(f).join(',')).join(' ');
+        polys += `<polygon points="${pts}" fill="${esc(col)}" fill-opacity="${op.toFixed(2)}" stroke="${esc(col)}"
+          stroke-width="${sel ? 1.6 : 0.9}" stroke-linejoin="round" ${lit === false ? 'stroke-dasharray="2.5 1.8"' : ''}>${cellTip ? `<title>${esc(tip + cellTip)}</title>` : ''}</polygon>`;
+        if (ent) {
+          const cx = sh.pts.reduce((a, q) => a + q[0], 0) / sh.pts.length;
+          const cy = sh.pts.reduce((a, q) => a + q[1], 0) / sh.pts.length;
+          const [x, y] = pt(cx, cy);
+          polys += `<circle cx="${f(x)}" cy="${f(y)}" r="0.9" fill="#fff" opacity=".85" pointer-events="none"/>`;
+        }
+      });
+      svg += `<g class="area" data-i="${ai}" ${sel ? 'filter="drop-shadow(0 0 2.5px rgba(255,255,255,.9))"' : ''}><title>${esc(tip)}</title>${polys}</g>`;
+      if (c.area_labels && shapes.length) {
+        const all = shapes.flatMap((x) => x.pts);
+        const cu = all.reduce((a, q) => a + q[0], 0) / all.length;
+        const cv = all.reduce((a, q) => a + q[1], 0) / all.length;
+        const [x, y] = pt(cu, cv);
+        const line1 = `${lit === true ? '☀ ' : lit === false ? '☁ ' : ''}${name}`;
+        const line2 = `${power !== null ? fmtPower(power) : ''}${util !== null ? ` · ${fmtNum(util, util < 10 ? 1 : 0)} %` : ''}`;
+        const wPx = Math.max(line1.length, line2.length) * 3.3 + 6;
+        labels += `<g pointer-events="none"><rect x="${f(x - wPx / 2)}" y="${f(y - 8)}" width="${f(wPx)}" height="${line2 ? 16 : 10}" rx="4" fill="rgba(0,0,0,.68)"/>
+          <text x="${f(x)}" y="${f(y - 2.5)}" font-size="6" font-weight="600" fill="#fff" text-anchor="middle">${esc(line1)}</text>
+          ${line2 ? `<text x="${f(x)}" y="${f(y + 4.8)}" font-size="5.6" fill="#fff" text-anchor="middle">${esc(line2)}</text>` : ''}</g>`;
+      }
+    });
+    g.innerHTML = svg + labels;
+    g.querySelectorAll('.area').forEach((el) => el.addEventListener('click', () => {
+      const src = this._areaSource(c.areas[Number(el.dataset.i)]);
+      if (!src || src.id === this._sourceId || c.sources.length < 2) return;
+      this._sourceId = src.id;
+      this._save('source', this._sourceId);
+      this._markButtons();
+      this._switchSource();
+    }));
+    void k;
   }
 
   _renderModules() {
@@ -1028,7 +1174,7 @@ class HeliosCompassCard extends HTMLElement {
     const metric = this._metric;
     const { n, width } = agg;
     const isClock = metric === 'clock';
-    ['g.static', 'g.modules', 'g.paths', '.bgwrap'].forEach((sel) => {
+    ['g.static', 'g.modules', 'g.paths', 'g.areas', '.bgwrap'].forEach((sel) => {
       const el = this.shadowRoot.querySelector(sel);
       if (el) el.style.display = isClock ? 'none' : '';
     });
@@ -1501,7 +1647,8 @@ class HeliosCompassCard extends HTMLElement {
     const src = this._src();
     const power = this._livePower(src);
     const allP = c.show_utilization ? c.sources.map((x) => this._livePower(x)).join(',') : '';
-    const sig = `${allP}|${this._showPaths}|${this._sourceId}|${sun.azimuth.toFixed(1)}|${sun.elevation.toFixed(1)}|${power}|${src.energy.map((e) => this._hass.states[e]?.state).join(',')}|`
+    const cellSig = c.areas.flatMap((a) => Object.values(a.cell_sensors || {})).map((e) => this._hass.states[e]?.state).join(',');
+    const sig = `${cellSig}|${allP}|${this._showPaths}|${this._sourceId}|${sun.azimuth.toFixed(1)}|${sun.elevation.toFixed(1)}|${power}|${src.energy.map((e) => this._hass.states[e]?.state).join(',')}|`
       + Object.values(c.corners).map((x) => (x?.entity ? this._hass.states[x.entity]?.state : '')).join('|');
     if (!force && sig === this._sig) return;
     this._sig = sig;
@@ -1577,6 +1724,7 @@ class HeliosCompassCard extends HTMLElement {
     const nowBin = this._bin(power);
     this.shadowRoot.querySelectorAll('.bar span').forEach((el) => el.classList.toggle('now', Number(el.dataset.i) === nowBin));
     this._renderUtil();
+    this._renderAreas();
   }
 
   _renderUtil() {
@@ -1613,6 +1761,7 @@ let SOURCE_SCHEMA; let MODULE_SCHEMA; let STOP_SCHEMA; let TOTAL_SCHEMA;
 
 const LABELS_EN = {
   language: 'Language',
+  source: 'System / sensor', g_rot: 'Grid rotation', g_w: 'Panel width', g_h: 'Panel height', g_x: 'Move grid ↔', g_y: 'Move grid ↕', cell_entity: 'Sensor for the next panel', area_labels: 'Labels on the areas',
   power_unit: 'Power unit (W/kW)', show_utilization: 'Utilization row (% per system)', utilization_base: 'Utilization based on',
   sun_marker: 'Sun marker', sun_marker_position: 'Sun marker position', sun_marker_color: 'Sun marker color',
   energy_display: '“Yield” view shows', power_style: '“Power” view shows', sector_labels: 'Values at the bars', label_toggle: '% button on the card to show/hide values', sector_labels_min: 'Label bars from (% of largest)',
@@ -1657,6 +1806,7 @@ const COLOR = { text: { type: 'color' } };
 
 LABELS = {
   language: 'Sprache',
+  source: 'Anlage / Sensor', g_rot: 'Raster-Drehung', g_w: 'Modul-Breite', g_h: 'Modul-Höhe', g_x: 'Raster verschieben ↔', g_y: 'Raster verschieben ↕', cell_entity: 'Sensor für das nächste Modul', area_labels: 'Beschriftung auf den Flächen',
   power_unit: 'Leistungseinheit (W/kW)', show_utilization: 'Auslastungszeile (% je Anlage)', utilization_base: 'Auslastung bezogen auf',
   sun_marker: 'Sonnenmarker', sun_marker_position: 'Position des Sonnenmarkers', sun_marker_color: 'Farbe des Sonnenmarkers',
   energy_display: 'Ansicht „Ertrag“ zeigt', power_style: 'Ansicht „Leistung“ zeigt', sector_labels: 'Werte an den Balken', label_toggle: '%-Knopf in der Karte zum Ein-/Ausblenden der Werte', sector_labels_min: 'Beschriften ab (% des größten Balkens)',
@@ -1797,6 +1947,7 @@ SECTIONS = [
     { name: 'image_opacity', selector: num(0, 1, 0.05, null, 'slider') },
     { name: 'image_clip', selector: { boolean: {} } },
   ] },
+  { key: 'areas', title: L('Flächen im Bild (Stränge markieren)', 'Areas in the image (mark strings)'), icon: '🟩', custom: 'areas' },
   { key: 'corners', title: L('Werte in den Ecken', 'Corner values'), icon: '🔲', custom: 'corners' },
   { key: 'sources', title: L('Anlagen (z. B. BKW + Dach)', 'Systems (e.g. balcony + roof)'), icon: '🔆', custom: 'sources' },
   { key: 'modules', title: L('Modulausrichtung (für alle Anlagen)', 'Panel orientation (all systems)'), icon: '📐', custom: 'modules' },
@@ -1899,6 +2050,11 @@ async function ensureHaForm() {
 }
 
 const EDITOR_CSS = `
+  .hc-editor .painter { position:relative; border-radius:8px; overflow:hidden; background:repeating-conic-gradient(#e8e8e8 0% 25%, #fff 0% 50%) 50% / 16px 16px; touch-action:none; user-select:none; }
+  .hc-editor .painter img { display:block; width:100%; height:auto; pointer-events:none; }
+  .hc-editor .painter svg { position:absolute; inset:0; width:100%; height:100%; cursor:crosshair; }
+  .hc-editor .brushes { display:flex; flex-wrap:wrap; gap:6px; align-items:center; font-size:.85em; }
+  .hc-editor .b.on { border-color: var(--primary-color); color: var(--primary-color); background: rgba(3,169,244,.08); }
   .hc-editor { display:flex; flex-direction:column; gap:8px; }
   .hc-editor details { border:1px solid var(--divider-color, #ddd); border-radius:10px; background: var(--card-background-color); }
   .hc-editor summary { cursor:pointer; padding:10px 12px; font-weight:500; list-style:none; display:flex; align-items:center; gap:8px; }
@@ -2168,9 +2324,265 @@ class HeliosCompassCardEditor extends HTMLElement {
     }
   }
 
+  /* ---------- Flächen im Bild ---------- */
+  _renderAreasEditor(body) {
+    const COLOR = { text: { type: 'color' } };
+    const num = (min, max, step, unit, mode = 'box') => ({ number: { min, max, step, mode, ...(unit ? { unit_of_measurement: unit } : {}) } });
+    const w = this._work;
+    if (!w.image) {
+      body.append(this._hint(L('Trage zuerst unter „🏠 Hausbild“ ein Bild ein.', 'First set an image under “🏠 House image”.')));
+      return;
+    }
+    const PAL = ['#f05a28', '#f5a623', '#22c55e', '#3b82f6', '#a855f7', '#ec4899', '#14b8a6', '#eab308'];
+    const areas = clone(w.areas) || [];
+    const save = (structural) => { this._set('areas', clone(areas)); this._emit(); if (structural) this._render(); };
+    const opts = (w.sources || []).filter((x) => x.entity).map((x) => ({ value: x.entity, label: x.name || x.entity }));
+    if (!opts.length && w.power_entity) opts.push({ value: w.power_entity, label: t('pv_power') });
+    if ((w.sources || []).length > 1 && w.show_total !== false) opts.push({ value: 'total', label: w.total_name || t('total') });
+    const schema = [
+      { type: 'grid', name: '', schema: [{ name: 'name', selector: { text: {} } }, { name: 'color', selector: COLOR }] },
+      { name: 'source', selector: { select: { mode: 'dropdown', options: opts } } },
+      { type: 'grid', name: '', schema: [{ name: 'azimuth', selector: num(0, 359, 1, '°') }, { name: 'tilt', selector: num(0, 90, 1, '°') }] },
+    ];
+    body.append(this._hint(L(
+      'Markiere jeden Strang im Hausbild: Fläche anlegen, Anlage zuordnen, dann „🖌 Im Bild markieren“. Am einfachsten mit dem Raster: Drehung an die Modulreihen anpassen, Kästchen auf Modulgröße stellen und die Module anklicken oder überstreichen. Azimut/Neigung (optional) zeigen, ob die Sonne die Fläche gerade trifft.',
+      'Mark each string in the house image: add an area, assign the system, then “🖌 Mark in image”. Easiest with the grid: rotate it to the panel rows, set the cell size to one panel and click or brush over the panels. Azimuth/tilt (optional) show whether the sun currently hits the area.')));
+    body.append(this._form([{ name: 'area_labels', selector: { boolean: {} } }], { area_labels: w.area_labels ?? true }, (v) => {
+      this._set('area_labels', v.area_labels === true ? undefined : v.area_labels);
+      this._emit();
+    }));
+    this._list(body, {
+      key: 'areas',
+      items: areas,
+      schema,
+      title: (a, i) => {
+        const n = (a.grid?.cells || []).length;
+        const pgs = (a.polygons || []).filter((x) => x.length > 2).length;
+        return `${a.name || `${L('Fläche', 'Area')} ${i + 1}`}${n ? ` · ${n} ${t('modules_n')}` : ''}${pgs ? ` · ${pgs} ${L('Teilflächen', 'parts')}` : ''}`;
+      },
+      swatch: (a) => a.color,
+      newItem: () => ({ name: `${L('Strang', 'String')} ${areas.length + 1}`, color: PAL[areas.length % PAL.length], source: opts[0]?.value }),
+      addLabel: L('Fläche hinzufügen', 'Add area'),
+      onChange: (items, structural) => {
+        if (structural && this._activeArea !== undefined && this._activeArea >= items.length) this._activeArea = undefined;
+        save(structural);
+      },
+      nested: (box, get, i) => {
+        const row = document.createElement('div');
+        row.className = 'row';
+        const active = this._activeArea === i;
+        row.append(this._btn(active ? L('✓ Markieren beenden', '✓ Finish marking') : L('🖌 Im Bild markieren', '🖌 Mark in image'), () => {
+          this._activeArea = active ? undefined : i;
+          this._render();
+        }, active ? 'on' : ''));
+        box.append(row);
+        if (active) box.append(this._painter(areas, i, save));
+      },
+    });
+  }
+
+  _painter(areas, ai, save) {
+    const COLOR = { text: { type: 'color' } };
+    const num = (min, max, step, unit, mode = 'box') => ({ number: { min, max, step, mode, ...(unit ? { unit_of_measurement: unit } : {}) } });
+    const wrapAll = document.createElement('div');
+    wrapAll.className = 'sub';
+    const A = () => areas[ai];
+    this._paintMode = this._paintMode || 'grid';
+    this._brush = this._brush || 'paint';
+    if (!A().grid) A().grid = { rotation: 0, x: 0, y: 0, w: 4, h: 7, cells: [] };
+    if (!Array.isArray(A().grid.cells)) A().grid.cells = [];
+    if (!Array.isArray(A().polygons)) A().polygons = [];
+    // Modus
+    const modes = document.createElement('div');
+    modes.className = 'brushes';
+    const mkBtn = (label, on, fn) => { const b = this._btn(label, fn); if (on) b.classList.add('on'); return b; };
+    modes.append(
+      mkBtn(L('▦ Raster', '▦ Grid'), this._paintMode === 'grid', () => { this._paintMode = 'grid'; this._render(); }),
+      mkBtn(L('✎ Frei zeichnen', '✎ Free drawing'), this._paintMode === 'free', () => { this._paintMode = 'free'; this._render(); }),
+    );
+    wrapAll.append(modes);
+    let redraw = () => {};
+    if (this._paintMode === 'grid') {
+      const g = A().grid;
+      const gridSchema = [
+        { name: 'g_rot', selector: num(-90, 90, 0.5, '°', 'slider') },
+        { type: 'grid', name: '', schema: [
+          { name: 'g_w', selector: num(0.5, 40, 0.1, null, 'slider') },
+          { name: 'g_h', selector: num(0.5, 40, 0.1, null, 'slider') },
+        ] },
+        { type: 'grid', name: '', schema: [
+          { name: 'g_x', selector: num(-20, 120, 0.1, null, 'slider') },
+          { name: 'g_y', selector: num(-20, 120, 0.1, null, 'slider') },
+        ] },
+      ];
+      wrapAll.append(this._form(gridSchema, { g_rot: g.rotation, g_w: g.w, g_h: g.h, g_x: g.x, g_y: g.y }, (v) => {
+        Object.assign(g, { rotation: v.g_rot, w: v.g_w, h: v.g_h, x: v.g_x, y: v.g_y });
+        redraw();
+        save(false);
+      }));
+      const brushes = document.createElement('div');
+      brushes.className = 'brushes';
+      brushes.append(document.createTextNode(L('Pinsel:', 'Brush:')));
+      [['paint', L('🖌 Malen', '🖌 Paint')], ['erase', L('🧽 Radieren', '🧽 Erase')], ['sensor', L('🔌 Modul-Sensor', '🔌 Panel sensor')]].forEach(([k, lbl]) => {
+        brushes.append(mkBtn(lbl, this._brush === k, () => { this._brush = k; this._render(); }));
+      });
+      brushes.append(this._btn(L('Alle löschen', 'Clear all'), () => { g.cells = []; A().cell_sensors = {}; redraw(); save(false); }));
+      wrapAll.append(brushes);
+      if (this._brush === 'sensor') {
+        wrapAll.append(this._hint(L('Sensor wählen und dann ein markiertes Modul anklicken. Leeres Feld + Klick entfernt die Zuordnung.', 'Pick a sensor, then click a marked panel. Empty field + click removes the assignment.')));
+        wrapAll.append(this._form([{ name: 'cell_entity', selector: { entity: { domain: 'sensor' } } }], { cell_entity: this._cellEntity }, (v) => { this._cellEntity = v.cell_entity; }));
+      }
+    } else {
+      const tools = document.createElement('div');
+      tools.className = 'brushes';
+      this._polyIdx = Math.min(this._polyIdx ?? A().polygons.length - 1, A().polygons.length - 1);
+      tools.append(
+        this._btn(L('+ Teilfläche', '+ Part'), () => { A().polygons.push([]); this._polyIdx = A().polygons.length - 1; redraw(); }),
+        this._btn(L('↺ Letzten Punkt entfernen', '↺ Remove last point'), () => { const pg = A().polygons[this._polyIdx]; if (pg) pg.pop(); redraw(); save(false); }),
+        this._btn(L('Teilfläche löschen', 'Delete part'), () => { if (this._polyIdx >= 0) A().polygons.splice(this._polyIdx, 1); this._polyIdx = A().polygons.length - 1; redraw(); save(false); }),
+      );
+      wrapAll.append(tools);
+      wrapAll.append(this._hint(L('Ecken der Module nacheinander anklicken. Punkte lassen sich ziehen, Rechtsklick löscht einen Punkt.', 'Click the panel corners one after another. Drag points to move them, right-click deletes a point.')));
+    }
+    // Zeichenfläche
+    const stage = document.createElement('div');
+    stage.className = 'painter';
+    const img = document.createElement('img');
+    let url = String(this._work.image);
+    if (/^\/(local|media|api)\//.test(url) && this._hass?.hassUrl) url = this._hass.hassUrl(url);
+    img.src = url;
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('preserveAspectRatio', 'none');
+    stage.append(img, svg);
+    wrapAll.append(stage);
+    let ar = 1;
+    const toImg = (ev) => {
+      const r = svg.getBoundingClientRect();
+      return [((ev.clientX - r.left) / r.width) * 100, ((ev.clientY - r.top) / r.height) * 100 * ar];
+    };
+    const f = (v) => v.toFixed(2);
+    redraw = () => {
+      const H = 100 * ar;
+      svg.setAttribute('viewBox', `0 0 100 ${f(H)}`);
+      let out = '';
+      areas.forEach((a, k) => {
+        if (k === ai) return;
+        areaShapes(a).forEach((sh) => { out += `<polygon points="${sh.pts.map((q) => q.map(f).join(',')).join(' ')}" fill="${esc(a.color || '#888')}" fill-opacity=".35" stroke="${esc(a.color || '#888')}" stroke-width=".25"/>`; });
+      });
+      const col = A().color || '#f5a623';
+      if (this._paintMode === 'grid') {
+        const g = A().grid;
+        const r = ((Number(g.rotation) || 0) * Math.PI) / 180;
+        const ux = [Math.cos(r), Math.sin(r)];
+        const uy = [-Math.sin(r), Math.cos(r)];
+        const corners = [[0, 0], [100, 0], [100, H], [0, H]].map(([x, y]) => {
+          const d = [x - g.x, y - g.y];
+          return [(d[0] * ux[0] + d[1] * ux[1]) / g.w, (d[0] * uy[0] + d[1] * uy[1]) / g.h];
+        });
+        const i0 = Math.floor(Math.min(...corners.map((q) => q[0])));
+        const i1 = Math.ceil(Math.max(...corners.map((q) => q[0])));
+        const j0 = Math.floor(Math.min(...corners.map((q) => q[1])));
+        const j1 = Math.ceil(Math.max(...corners.map((q) => q[1])));
+        if ((i1 - i0) * (j1 - j0) < 6000) {
+          for (let i = i0; i <= i1; i++) {
+            const a = gridCell(g, i, j0)[0];
+            const b = gridCell(g, i, j1)[0];
+            out += `<line x1="${f(a[0])}" y1="${f(a[1])}" x2="${f(b[0])}" y2="${f(b[1])}" stroke="rgba(0,190,255,.75)" stroke-width=".18"/>`;
+          }
+          for (let j = j0; j <= j1; j++) {
+            const a = gridCell(g, i0, j)[0];
+            const b = gridCell(g, i1, j)[0];
+            out += `<line x1="${f(a[0])}" y1="${f(a[1])}" x2="${f(b[0])}" y2="${f(b[1])}" stroke="rgba(0,190,255,.75)" stroke-width=".18"/>`;
+          }
+        }
+        g.cells.forEach(([i, j]) => {
+          const pts = gridCell(g, i, j);
+          out += `<polygon points="${pts.map((q) => q.map(f).join(',')).join(' ')}" fill="${esc(col)}" fill-opacity=".6" stroke="#fff" stroke-width=".3"/>`;
+          if (A().cell_sensors?.[`${i},${j}`]) {
+            const cx = pts.reduce((s1, q) => s1 + q[0], 0) / 4;
+            const cy = pts.reduce((s1, q) => s1 + q[1], 0) / 4;
+            out += `<circle cx="${f(cx)}" cy="${f(cy)}" r=".9" fill="#fff" stroke="${esc(col)}" stroke-width=".3"><title>${esc(A().cell_sensors[`${i},${j}`])}</title></circle>`;
+          }
+        });
+      } else {
+        A().polygons.forEach((pg, k) => {
+          if (!pg.length) return;
+          const pts = pg.map((q) => q.map(f).join(',')).join(' ');
+          out += pg.length > 2 && k !== this._polyIdx
+            ? `<polygon points="${pts}" fill="${esc(col)}" fill-opacity=".45" stroke="${esc(col)}" stroke-width=".4"/>`
+            : `<polygon points="${pts}" fill="${esc(col)}" fill-opacity=".3" stroke="${esc(col)}" stroke-width=".5" stroke-dasharray="1.2 .8"/>`;
+          if (k === this._polyIdx) pg.forEach((q, n) => { out += `<circle data-p="${n}" cx="${f(q[0])}" cy="${f(q[1])}" r="1.3" fill="#fff" stroke="${esc(col)}" stroke-width=".5"/>`; });
+        });
+      }
+      svg.innerHTML = out;
+    };
+    img.onload = () => { ar = img.naturalHeight / img.naturalWidth || 1; redraw(); };
+    // Eingabe
+    let down = false;
+    let target = null;
+    let dragPt = -1;
+    const cellAt = (p) => {
+      const g = A().grid;
+      const r = ((Number(g.rotation) || 0) * Math.PI) / 180;
+      const d = [p[0] - g.x, p[1] - g.y];
+      return [Math.floor((d[0] * Math.cos(r) + d[1] * Math.sin(r)) / g.w), Math.floor((-d[0] * Math.sin(r) + d[1] * Math.cos(r)) / g.h)];
+    };
+    const applyCell = (p) => {
+      const [i, j] = cellAt(p);
+      const g = A().grid;
+      const idx = g.cells.findIndex((q) => q[0] === i && q[1] === j);
+      if (this._brush === 'sensor') {
+        if (idx < 0) return;
+        A().cell_sensors = A().cell_sensors || {};
+        if (this._cellEntity) A().cell_sensors[`${i},${j}`] = this._cellEntity;
+        else delete A().cell_sensors[`${i},${j}`];
+        return;
+      }
+      if (target === null) target = this._brush === 'paint' ? idx < 0 : false;
+      if (target && idx < 0) g.cells.push([i, j]);
+      if (!target && idx >= 0) {
+        g.cells.splice(idx, 1);
+        if (A().cell_sensors) delete A().cell_sensors[`${i},${j}`];
+      }
+    };
+    svg.addEventListener('contextmenu', (ev) => {
+      ev.preventDefault();
+      if (this._paintMode !== 'free') return;
+      const n = ev.target.dataset?.p;
+      if (n !== undefined) { A().polygons[this._polyIdx].splice(Number(n), 1); redraw(); save(false); }
+    });
+    svg.addEventListener('pointerdown', (ev) => {
+      if (ev.button === 2) return;
+      ev.preventDefault();
+      svg.setPointerCapture(ev.pointerId);
+      down = true;
+      target = null;
+      const p = toImg(ev);
+      if (this._paintMode === 'grid') { applyCell(p); redraw(); return; }
+      if (this._polyIdx < 0 || !A().polygons[this._polyIdx]) { A().polygons.push([]); this._polyIdx = A().polygons.length - 1; }
+      const pg = A().polygons[this._polyIdx];
+      dragPt = pg.findIndex((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) < 2);
+      if (dragPt < 0) { pg.push([Number(p[0].toFixed(2)), Number(p[1].toFixed(2))]); dragPt = pg.length - 1; }
+      redraw();
+    });
+    svg.addEventListener('pointermove', (ev) => {
+      if (!down) return;
+      const p = toImg(ev);
+      if (this._paintMode === 'grid') { if (this._brush !== 'sensor') { applyCell(p); redraw(); } return; }
+      const pg = A().polygons[this._polyIdx];
+      if (pg && dragPt >= 0) { pg[dragPt] = [Number(p[0].toFixed(2)), Number(p[1].toFixed(2))]; redraw(); }
+    });
+    const up = () => { if (!down) return; down = false; dragPt = -1; target = null; save(false); };
+    svg.addEventListener('pointerup', up);
+    svg.addEventListener('pointercancel', up);
+    if (img.complete && img.naturalWidth) img.onload();
+    return wrapAll;
+  }
+
   _renderSection(sec, body) {
     const w = this._work;
     if (sec.custom === 'corners') return this._renderCorners(body);
+    if (sec.custom === 'areas') return this._renderAreasEditor(body);
     if (sec.custom === 'sources') return this._renderSources(body);
     if (sec.custom === 'modules') {
       body.append(this._hint(L('Gestrichelte Pfeile zeigen, wohin deine Module zeigen. Diese Modulfelder erscheinen bei jeder Anlage; eigene Felder je Anlage findest du unter „Anlagen“.', 'Dashed arrows show where your panels face. These arrays appear for every system; arrays per system are under “Systems”.')));

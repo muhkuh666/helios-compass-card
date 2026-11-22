@@ -5,7 +5,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
 [![Validate](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml/badge.svg)](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml)
 ![Lizenz](https://img.shields.io/github/license/muhkuh666/helios-compass-card)
-![Version](https://img.shields.io/badge/version-1.14.0-orange.svg)
+![Version](https://img.shields.io/badge/version-1.15.0-orange.svg)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-muhkuh666-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/muhkuh666)
 
 **PV-Sonnenkompass für Home Assistant.** Die Karte zeigt, aus welcher Himmelsrichtung deine Solaranlage wie viel liefert. Jeder Sektor der Rose steht für eine Sonnenrichtung. Die Farben zeigen die Leistungsklassen, die Länge den Anteil an Zeit oder Ertrag. Darunter liegt auf Wunsch ein Luftbild deines Hauses.
@@ -42,6 +42,7 @@ Geeignet für Balkonkraftwerke, Dachanlagen und beides zusammen.
 - **Auslastung in %:** je Anlage und gesamt, als Zeile mit Balken und als Eckwert.
 - **Kennzahlen:** Ertrag im Zeitraum, Spitzenleistung mit Zeitpunkt und Richtung, beste Richtung.
 - **Modulausrichtung:** gestrichelte Pfeile mit Name und Neigung für jedes Modulfeld.
+- **Stränge im Bild markieren:** Modulflächen per drehbarem Raster oder frei gezeichnet, live eingefärbt nach Auslastung, mit ☀/☁ und optional je Modul ein eigener Sensor.
 - **Hausbild (optional):** drehen, verschieben, skalieren und rund zuschneiden.
 - **Live-Werte:** Sonnenmarker als Pfeil, Kreis, Sonnensymbol oder Punkt, am Rand oder auf Sonnenhöhe, Sonnenazimut, Sonnenhöhe und aktuelle Leistung in den Ecken.
 - **Legende:** Anteil je Leistungsklasse. Die Klasse, in der die aktuelle Leistung liegt, ist umrandet.
@@ -105,6 +106,7 @@ Der Editor ist in Abschnitte gegliedert. Die Vorschau aktualisiert sich bei jede
 | ⚙️ **Allgemein** | Titel, PV-Sensor, maximale Leistung, Beschriftung der Farbskala, kWp |
 | 🧭 **Darstellung** | Standard-Ansicht, Standard-Zeitraum, angezeigte Zeitraum-Buttons, Sommer/Winter-Vergleich, Sonnenbahnen, Anzahl und Deckkraft der Sektoren, Höhenringe der Schatten-Ansicht, Umschalter, Kennzahlen und Farbskala ein/aus |
 | 🏠 **Hausbild** | Bildpfad, Drehung, Verschieben, Größe, Deckkraft, runder Zuschnitt |
+| 🟩 **Flächen im Bild** | Stränge/Module auf dem Luftbild markieren: Raster mit Drehung, Größe, Pinsel, Radierer und Modul-Sensor, oder frei zeichnen |
 | 🔲 **Werte in den Ecken** | je Ecke: Leistung der gewählten Anlage, beliebige Entität (mit Einheit und Nachkommastellen), Sonnenazimut, Sonnenhöhe oder ausblenden |
 | 🔆 **Anlagen** | mehrere Sensoren mit kWp, eigenen Modulfeldern und Leistungsklassen, Summe „Gesamt“, Standard-Anlage |
 | 📐 **Modulausrichtung** | Modulfelder für alle Anlagen: Name, Farbe, Azimut, Neigung, kWp |
@@ -156,6 +158,47 @@ Die Ansicht **Schatten** (oder jede andere) blendest du über `metrics` aus dem 
 ```yaml
 metrics: [time, energy, avg_power]
 ```
+
+---
+
+## Stränge im Hausbild markieren
+
+Unter **🟩 Flächen im Bild** markierst du jeden Strang und das Balkonkraftwerk direkt auf deinem Luftbild. Die Karte färbt die Flächen dann **live** ein:
+
+- **Farbstärke = Auslastung:** Ein Strang mit 65 % leuchtet kräftig, einer mit 10 % nur blass.
+- **☀ / ☁:** Mit Azimut und Neigung der Fläche erkennt die Karte, ob die Sonne die Fläche gerade direkt trifft. Steht sie dahinter, ist der Rand gestrichelt.
+- **Beschriftung** mit Name, Leistung und Auslastung (abschaltbar).
+- **Antippen** einer Fläche wählt die passende Anlage im Umschalter.
+
+**So markierst du (empfohlen: Raster)**
+1. **Fläche hinzufügen**, Name und Farbe wählen und die **Anlage / den Sensor** zuordnen.
+2. **🖌 Im Bild markieren** klicken.
+3. **Raster-Drehung** so einstellen, dass die Linien parallel zu den Modulreihen liegen. **Modul-Breite/-Höhe** auf ein Modul stellen und das Raster **verschieben**, bis es auf den Modulen sitzt.
+4. Mit dem **Pinsel** die Module anklicken oder überstreichen. **Radieren** entfernt sie wieder.
+5. Jede Fläche hat ihr **eigenes Raster**, z. B. Dach und Garage mit unterschiedlicher Ausrichtung.
+
+Alternativ: **✎ Frei zeichnen**. Du klickst die Ecken an, Punkte lassen sich ziehen, Rechtsklick löscht. Getrennte Modulgruppen werden als **Teilflächen** angelegt.
+
+**Modul-Sensoren:** Hat jedes Modul einen eigenen Sensor (Mikrowechselrichter, Optimierer), wählst du mit dem Pinsel **🔌 Modul-Sensor** einen Sensor und klickst das Modul an. Das Modul leuchtet dann einzeln nach seiner eigenen Leistung.
+
+```yaml
+areas:
+  - name: Strang 1
+    source: sensor.pv1_leistung      # Sensor einer Anlage oder "total"
+    color: "#f05a28"
+    azimuth: 110                     # optional, für ☀/☁
+    tilt: 35
+    grid: {rotation: 21, x: 37.2, y: 26.7, w: 3.46, h: 6.64, cells: [[0,0],[1,0],[2,0]]}
+    cell_sensors: {"0,0": sensor.modul_1}   # optional
+  - name: BKW
+    source: sensor.bkw_leistung
+    color: "#22c55e"
+    polygons:
+      - [[4.0,43.6],[13.3,46.2],[12.7,50.8],[3.5,48.2]]
+area_labels: true
+```
+
+Die Koordinaten beziehen sich auf das Bild (0–100 = Bildbreite). Drehst, verschiebst oder skalierst du das Hausbild, wandern die Flächen mit. In der Ansicht „Uhr“ sind die Flächen ausgeblendet.
 
 ---
 
@@ -366,6 +409,8 @@ Die Standardbelegung: oben links die Leistung der gewählten Anlage, oben rechts
 | `color_stops` | 9 Stufen bis `max_power` | Liste aus `{value, color}` |
 | `modules` | – | Modulfelder für alle Anlagen |
 | `corners` | siehe oben | Werte in den vier Ecken |
+| `areas` | – | markierte Flächen im Hausbild, siehe „Stränge im Hausbild markieren“ |
+| `area_labels` | `true` | Beschriftung auf den Flächen |
 
 ¹ Entfällt, wenn `sources` genutzt wird.
 
@@ -470,6 +515,7 @@ mode: single
 
 | Version | Änderungen |
 |---|---|
+| **1.15.0** | Stränge im Hausbild markieren: drehbares Raster mit Pinsel/Radierer oder frei zeichnen; Flächen live nach Auslastung eingefärbt, ☀/☁ aus Ausrichtung, Antippen wählt die Anlage; optional Sensor je Modul |
 | **1.14.0** | Neue Ansicht „Uhr“: Heatmap mit Uhrzeit als Winkel und Tagen/Wochen als Ringe, Linie für „jetzt“ |
 | **1.13.0** | %-Knopf in der Karte zum Ein-/Ausblenden der Balkenwerte (`label_toggle`); kompakterer Umschalter; Anzeige „1,00 kWh“ statt „1.000 Wh“ |
 | **1.12.0** | Werte an den Balkenspitzen einblendbar (`sector_labels`, `sector_labels_min`) |
