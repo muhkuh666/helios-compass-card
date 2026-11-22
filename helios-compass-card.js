@@ -4,7 +4,7 @@
  *
  * Installation: siehe README.md
  */
-const CARD_VERSION = '1.19.0';
+const CARD_VERSION = '1.20.0';
 
 /* ---------- Sprache / Language ---------- */
 let LANG = 'de';
@@ -47,6 +47,7 @@ const I18N = {
     avg_tip: 'Ø {p} bei Sonne aus dieser Richtung ({pct} % der Sonnenzeit)',
     path_today: 'Sonnenbahn heute', path_on: 'Sonnenbahn am {d}', sunrise: 'Aufgang', sunset: 'Untergang',
     noon: 'Mittagshöhe {e}° um {t}', dist_note: 'Abstand zur Mitte = Sonnenhöhe (Rand = Horizont)',
+    moon_path: 'Mondbahn (aktueller bzw. nächster Durchgang)', moonrise: 'Mondaufgang', moonset: 'Monduntergang', moon_top: 'Höchster Stand {e}° um {t}',
     moon_tip: 'Mond: Azimut {a}°, Höhe {e}° · {p} ({i} % beleuchtet)', moon_azimuth: 'Mondazimut', moon_elevation: 'Mondhöhe', moon_phase: 'Mondphase', moon_illum: 'Mond beleuchtet',
     moon_p0: 'Neumond', moon_p1: 'Zunehmende Sichel', moon_p2: 'Zunehmender Halbmond', moon_p3: 'Zunehmender Mond', moon_p4: 'Vollmond', moon_p5: 'Abnehmender Mond', moon_p6: 'Abnehmender Halbmond', moon_p7: 'Abnehmende Sichel',
     sun_tip: 'Sonne: Azimut {a}°, Höhe {e}°', sun_now: 'Sonne jetzt: Azimut {a}°, Höhe {e}°',
@@ -81,6 +82,7 @@ const I18N = {
     avg_tip: 'Avg {p} with sun from this direction ({pct} % of sun time)',
     path_today: 'Sun path today', path_on: 'Sun path on {d}', sunrise: 'Sunrise', sunset: 'Sunset',
     noon: 'Max elevation {e}° at {t}', dist_note: 'Distance from center = sun elevation (edge = horizon)',
+    moon_path: 'Moon path (current or next pass)', moonrise: 'Moonrise', moonset: 'Moonset', moon_top: 'Highest {e}° at {t}',
     moon_tip: 'Moon: azimuth {a}°, elevation {e}° · {p} ({i} % illuminated)', moon_azimuth: 'Moon azimuth', moon_elevation: 'Moon elevation', moon_phase: 'Moon phase', moon_illum: 'Moon illuminated',
     moon_p0: 'New moon', moon_p1: 'Waxing crescent', moon_p2: 'First quarter', moon_p3: 'Waxing gibbous', moon_p4: 'Full moon', moon_p5: 'Waning gibbous', moon_p6: 'Last quarter', moon_p7: 'Waning crescent',
     sun_tip: 'Sun: azimuth {a}°, elevation {e}°', sun_now: 'Sun now: azimuth {a}°, elevation {e}°',
@@ -177,6 +179,7 @@ const DEFAULTS = {
   moon_marker_position: 'edge', // 'edge' | 'elevation'
   moon_marker_color: '#fff8dc',
   moon_below_horizon: false, // Mond auch unter dem Horizont (blass) zeigen
+  moon_path: false, // Mondbahn (aktueller bzw. nächster Durchgang) mit Auf- und Untergang
   power_style: 'both', // Ansicht Leistung: 'both' | 'line' | 'dots' | 'area' | 'bars'
   sector_labels: false, // Werte an den Balkenspitzen anzeigen
   sector_labels_min: 20,
@@ -855,7 +858,7 @@ class HeliosCompassCard extends HTMLElement {
         <div class="plot">
           ${c.image ? '<div class="bgwrap"><img class="bg" alt="" decoding="async"></div>' : ''}
           <svg class="rose" viewBox="-160 -160 320 320" preserveAspectRatio="xMidYMid meet">
-            <g class="static"></g><g class="areas"></g><g class="trace"></g><g class="paths"></g><g class="modules"></g><g class="sun"></g>
+            <g class="static"></g><g class="areas"></g><g class="trace"></g><g class="paths"></g><g class="moonpath"></g><g class="modules"></g><g class="sun"></g>
           </svg>
           ${corner('top_left')}${corner('top_right')}${corner('bottom_left')}${corner('bottom_right')}
         </div>
@@ -910,6 +913,7 @@ class HeliosCompassCard extends HTMLElement {
       this._metric = b.dataset.m;
       this._save('metric', this._metric);
       this._markButtons();
+      this._renderMoonPath();
       this._renderPlot();
       this._update(true);
     }));
@@ -924,6 +928,7 @@ class HeliosCompassCard extends HTMLElement {
     this._renderStatic();
     this._renderModules();
     this._renderSunPaths();
+    this._renderMoonPath();
     this._markButtons();
     this._built = true;
   }
@@ -1264,6 +1269,64 @@ class HeliosCompassCard extends HTMLElement {
     });
     g.innerHTML = svg;
     this._pathsDay = now.toDateString();
+  }
+
+  /* Mondbahn: aktueller Durchgang (wenn der Mond oben ist) oder der nächste */
+  _renderMoonPath() {
+    const c = this._config;
+    const g = this.shadowRoot.querySelector('g.moonpath');
+    if (!g) return;
+    this._moonPathT = Date.now();
+    if (!c.moon_path || this._metric === 'clock') { g.innerHTML = ''; return; }
+    const { lat, lon } = this._location();
+    const R = this._R();
+    const rEl = (e) => (1 - Math.max(0, e) / 90) * R;
+    const step = 10 * 60e3;
+    const now = Math.floor(Date.now() / step) * step;
+    const at = (tt) => ({ t: tt, ...moonData(new Date(tt), lat, lon) });
+    const pts = [];
+    for (let tt = now - 16 * 3600e3; tt <= now + 40 * 3600e3; tt += step) pts.push(at(tt));
+    const i0 = pts.findIndex((p) => p.t >= now);
+    let a = i0;
+    if (pts[a].elevation <= 0) { while (a < pts.length && pts[a].elevation <= 0) a++; } else { while (a > 0 && pts[a - 1].elevation > 0) a--; }
+    if (a >= pts.length) { g.innerHTML = ''; return; }
+    let b = a;
+    while (b < pts.length - 1 && pts[b + 1].elevation > 0) b++;
+    const cross = (p, q) => { const k = p.elevation / (p.elevation - q.elevation); return at(p.t + k * (q.t - p.t)); };
+    const rise = a > 0 ? cross(pts[a - 1], pts[a]) : null;
+    const set = b < pts.length - 1 ? cross(pts[b], pts[b + 1]) : null;
+    const up = pts.slice(a, b + 1);
+    const line = [rise, ...up, set].filter(Boolean);
+    const col = c.moon_marker_color || '#fff8dc';
+    const P = (pt) => this._xy(pt.azimuth, rEl(pt.elevation)).map((v) => v.toFixed(1)).join(',');
+    const fmtT = (ts) => new Date(ts).toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit' });
+    const fmtD = (ts) => (new Date(ts).toDateString() === new Date().toDateString() ? '' : `${new Date(ts).toLocaleDateString(LOCALE, { weekday: 'short' })} `);
+    const top = up.reduce((m, p) => (p.elevation > m.elevation ? p : m), up[0]);
+    const title = t('moon_path')
+      + (rise ? `\n${t('moonrise')} ${fmtD(rise.t)}${fmtT(rise.t)} (${dir16(rise.azimuth)} ${Math.round(rise.azimuth)}°)` : '')
+      + (set ? `\n${t('moonset')} ${fmtD(set.t)}${fmtT(set.t)} (${dir16(set.azimuth)} ${Math.round(set.azimuth)}°)` : '')
+      + `\n${t('moon_top', { e: Math.round(top.elevation), t: fmtT(top.t) })}`;
+    let svg = `<g class="sunpath"><title>${title}</title>
+      <polyline points="${line.map(P).join(' ')}" fill="none" stroke="${col}" stroke-width="1.5" stroke-dasharray="1.5 3"
+        stroke-linecap="round" stroke-linejoin="round" opacity=".95" filter="drop-shadow(0 0 1px rgba(0,0,0,.7))"/>`;
+    up.filter((p) => new Date(p.t).getMinutes() === 0).forEach((p) => {
+      const [x, y] = this._xy(p.azimuth, rEl(p.elevation));
+      const h = new Date(p.t).getHours();
+      svg += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="1.3" fill="${col}" stroke="#455a64" stroke-width=".5"/>`;
+      if (h % 3 === 0) {
+        svg += `<text x="${x.toFixed(1)}" y="${(y + 8).toFixed(1)}" font-size="6.5" fill="${col}" stroke="rgba(0,0,0,.75)" stroke-width="1.8"
+                  paint-order="stroke" text-anchor="middle">${h}</text>`;
+      }
+    });
+    [[rise, '↑'], [set, '↓']].forEach(([p, arrow]) => {
+      if (!p) return;
+      const [x, y] = this._xy(p.azimuth, R);
+      const [lx, ly] = this._xy(p.azimuth, R - 11);
+      svg += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.6" fill="${col}" stroke="#455a64" stroke-width="1"/>
+        <text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" font-size="7" font-weight="600" fill="${col}" stroke="rgba(0,0,0,.8)" stroke-width="2"
+          paint-order="stroke" text-anchor="middle" dominant-baseline="middle">☾${arrow}${fmtT(p.t)}</text>`;
+    });
+    g.innerHTML = `${svg}</g>`;
   }
 
   /* ---------- Auswertung ---------- */
@@ -1913,6 +1976,7 @@ class HeliosCompassCard extends HTMLElement {
     }
     this.shadowRoot.querySelector('g.sun').innerHTML = sunSvg;
     if (this._pathsDay && this._pathsDay !== new Date().toDateString()) this._renderSunPaths();
+    if (c.moon_path && Date.now() - (this._moonPathT || 0) > 600e3) this._renderMoonPath();
 
     const nowBin = this._bin(power);
     this.shadowRoot.querySelectorAll('.bar span').forEach((el) => el.classList.toggle('now', Number(el.dataset.i) === nowBin));
@@ -1957,7 +2021,7 @@ const LABELS_EN = {
   language: 'Language',
   source: 'Power sensor of this area (W or kW)', system: 'Belongs to system', g_rot: 'Grid rotation', g_w: 'Panel width', g_h: 'Panel height', g_x: 'Move grid ↔', g_y: 'Move grid ↕', cell_entity: 'Sensor for the next panel', area_labels: 'Labels on the areas', area_toggle: '▦ button on the card to show/hide the areas', area_summary: 'Summary row (power per area + total)',
   power_unit: 'Power unit (W/kW)', show_utilization: 'Utilization row (% per system)', utilization_base: 'Utilization based on',
-  sun_marker: 'Sun marker', sun_marker_position: 'Sun marker position', sun_marker_color: 'Sun marker color', moon_marker: 'Moon marker', moon_marker_position: 'Moon marker position', moon_marker_color: 'Color of the lit moon', moon_below_horizon: 'Show moon below the horizon (faded)',
+  sun_marker: 'Sun marker', sun_marker_position: 'Sun marker position', sun_marker_color: 'Sun marker color', moon_marker: 'Moon marker', moon_marker_position: 'Moon marker position', moon_marker_color: 'Color of the lit moon', moon_below_horizon: 'Show moon below the horizon (faded)', moon_path: 'Draw moon path (with moonrise/moonset)',
   energy_display: '“Yield” view shows', power_style: '“Power” view shows', sector_labels: 'Values at the bars', label_toggle: '% button on the card to show/hide values', sector_labels_min: 'Label bars from (% of largest)',
   title: 'Title (empty = no title)', power_entity: 'PV power sensor', max_power: 'Max. power', legend_label: 'Color scale label',
   metric: 'Default view', default_range: 'Default period', ranges: 'Visible period buttons', sectors: 'Number of direction sectors',
@@ -2002,7 +2066,7 @@ LABELS = {
   language: 'Sprache',
   source: 'Leistungssensor dieser Fläche (W oder kW)', system: 'Gehört zu Anlage', g_rot: 'Raster-Drehung', g_w: 'Modul-Breite', g_h: 'Modul-Höhe', g_x: 'Raster verschieben ↔', g_y: 'Raster verschieben ↕', cell_entity: 'Sensor für das nächste Modul', area_labels: 'Beschriftung auf den Flächen', area_toggle: '▦-Knopf in der Karte zum Ein-/Ausblenden der Flächen', area_summary: 'Summenzeile (Leistung je Fläche + Gesamt)',
   power_unit: 'Leistungseinheit (W/kW)', show_utilization: 'Auslastungszeile (% je Anlage)', utilization_base: 'Auslastung bezogen auf',
-  sun_marker: 'Sonnenmarker', sun_marker_position: 'Position des Sonnenmarkers', sun_marker_color: 'Farbe des Sonnenmarkers', moon_marker: 'Mondmarker', moon_marker_position: 'Position des Mondmarkers', moon_marker_color: 'Farbe des beleuchteten Monds', moon_below_horizon: 'Mond auch unter dem Horizont zeigen (blass)',
+  sun_marker: 'Sonnenmarker', sun_marker_position: 'Position des Sonnenmarkers', sun_marker_color: 'Farbe des Sonnenmarkers', moon_marker: 'Mondmarker', moon_marker_position: 'Position des Mondmarkers', moon_marker_color: 'Farbe des beleuchteten Monds', moon_below_horizon: 'Mond auch unter dem Horizont zeigen (blass)', moon_path: 'Mondbahn zeichnen (mit Auf- und Untergang)',
   energy_display: 'Ansicht „Ertrag“ zeigt', power_style: 'Ansicht „Leistung“ zeigt', sector_labels: 'Werte an den Balken', label_toggle: '%-Knopf in der Karte zum Ein-/Ausblenden der Werte', sector_labels_min: 'Beschriften ab (% des größten Balkens)',
   title: 'Titel (leer = kein Titel)',
   power_entity: 'PV-Leistungssensor',
@@ -2132,6 +2196,7 @@ SECTIONS = [
       { name: 'moon_marker_color', selector: COLOR },
       { name: 'moon_below_horizon', selector: { boolean: {} } },
     ] },
+    { name: 'moon_path', selector: { boolean: {} } },
     { name: 'season_overlay', selector: { boolean: {} } },
     { name: 'show_sun_paths', selector: { boolean: {} } },
     { name: 'sun_path_toggle', selector: { boolean: {} } },

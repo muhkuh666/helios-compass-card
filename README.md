@@ -5,7 +5,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
 [![Validate](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml/badge.svg)](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml)
 ![License](https://img.shields.io/github/license/muhkuh666/helios-compass-card)
-![Version](https://img.shields.io/badge/version-1.19.0-orange.svg)
+![Version](https://img.shields.io/badge/version-1.20.0-orange.svg)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-muhkuh666-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/muhkuh666)
 
 **A solar compass for Home Assistant.** This card shows which compass direction your solar system gets its power from. Each sector of the rose is a sun direction. Colors show power classes, and the sector length shows the share of time or yield. An aerial image of your house can sit underneath.
@@ -405,6 +405,7 @@ Defaults: top left shows the power of the selected system, top right the sun azi
 | `moon_marker_position` | `edge` | `edge` or `elevation` (at moon elevation) |
 | `moon_marker_color` | `#fff8dc` | color of the lit part of the moon |
 | `moon_below_horizon` | `false` | also show the moon below the horizon (faded) |
+| `moon_path` | `false` | draw the moon path (current or next pass) with moonrise ☾↑ and moonset ☾↓ |
 | `metric` | `time` | default view: `areas`, `power`, `time`, `energy`, `avg_power`, `shading` or `clock` |
 | `show_metric_switch` | `true` | show the view switch |
 | `metrics` | all | views in the switch: `areas`, `power`, `time`, `energy`, `avg_power`, `shading`, `clock` |
@@ -530,6 +531,7 @@ mode: single
 
 | Version | Changes |
 |---|---|
+| **1.20.0** | 🌙 Moon path (`moon_path`): current or next pass of the moon with hour marks, moonrise and moonset |
 | **1.19.0** | 🌙 Moon in the rose: symbol with the real moon phase, at the edge or at moon elevation (`moon_marker`, `moon_marker_position`, `moon_marker_color`, `moon_below_horizon`); new corner values moon phase, illumination, moon azimuth and elevation – calculated locally, no sensor needed |
 | **1.18.0** | ▦ button on the card to show/hide the areas in the house image (`area_toggle`) |
 | **1.17.0** | New “Areas” view (strings in the image only, no bars); summary row per area + total (`area_summary`); corner value “Total power of all systems” (`type: total`); clearer hints for areas |

@@ -5,7 +5,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
 [![Validate](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml/badge.svg)](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml)
 ![Lizenz](https://img.shields.io/github/license/muhkuh666/helios-compass-card)
-![Version](https://img.shields.io/badge/version-1.19.0-orange.svg)
+![Version](https://img.shields.io/badge/version-1.20.0-orange.svg)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-muhkuh666-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/muhkuh666)
 
 **PV-Sonnenkompass für Home Assistant.** Die Karte zeigt, aus welcher Himmelsrichtung deine Solaranlage wie viel liefert. Jeder Sektor der Rose steht für eine Sonnenrichtung. Die Farben zeigen die Leistungsklassen, die Länge den Anteil an Zeit oder Ertrag. Darunter liegt auf Wunsch ein Luftbild deines Hauses.
@@ -405,6 +405,7 @@ Die Standardbelegung: oben links die Leistung der gewählten Anlage, oben rechts
 | `moon_marker_position` | `edge` | `edge` (am Rand) oder `elevation` (auf Mondhöhe) |
 | `moon_marker_color` | `#fff8dc` | Farbe des beleuchteten Monds |
 | `moon_below_horizon` | `false` | Mond auch unter dem Horizont zeigen (blass) |
+| `moon_path` | `false` | Mondbahn (aktueller bzw. nächster Durchgang) mit Mondaufgang ☾↑ und Monduntergang ☾↓ |
 | `metric` | `time` | Standard-Ansicht: `areas`, `power`, `time`, `energy`, `avg_power`, `shading` oder `clock` |
 | `show_metric_switch` | `true` | Umschalter Zeit / Ertrag / Ø Leistung / Schatten anzeigen |
 | `show_stats` | `true` | Kennzahlen-Zeile anzeigen |
@@ -531,6 +532,7 @@ mode: single
 
 | Version | Änderungen |
 |---|---|
+| **1.20.0** | 🌙 Mondbahn (`moon_path`): aktueller bzw. nächster Durchgang des Monds mit Stundenmarken, Auf- und Untergang |
 | **1.19.0** | 🌙 Mond in der Rose: Symbol mit echter Mondphase, am Rand oder auf Mondhöhe (`moon_marker`, `moon_marker_position`, `moon_marker_color`, `moon_below_horizon`); neue Eckwerte Mondphase, Beleuchtung, Mondazimut und Mondhöhe – lokal berechnet, kein Sensor nötig |
 | **1.18.0** | ▦-Knopf in der Karte zum Ein-/Ausblenden der Flächen im Hausbild (`area_toggle`) |
 | **1.17.0** | Neue Ansicht „Flächen“ (nur Stränge im Bild, ohne Balken); Summenzeile je Fläche + Gesamt (`area_summary`); Eckwert „Gesamtleistung aller Anlagen“ (`type: total`); verständlichere Hinweise bei den Flächen |
