@@ -5,7 +5,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
 [![Validate](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml/badge.svg)](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml)
 ![License](https://img.shields.io/github/license/muhkuh666/helios-compass-card)
-![Version](https://img.shields.io/badge/version-1.18.0-orange.svg)
+![Version](https://img.shields.io/badge/version-1.19.0-orange.svg)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-muhkuh666-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/muhkuh666)
 
 **A solar compass for Home Assistant.** This card shows which compass direction your solar system gets its power from. Each sector of the rose is a sun direction. Colors show power classes, and the sector length shows the share of time or yield. An aerial image of your house can sit underneath.
@@ -367,6 +367,9 @@ corners:
 | `entity: …` | any entity, optionally with `unit` and `decimals` |
 | `type: azimuth` | current sun azimuth |
 | `type: elevation` | current sun elevation |
+| `type: moon_phase` | moon phase (e.g. “Waxing gibbous”) |
+| `type: moon_illum` | moon illuminated in % |
+| `type: moon_azimuth` / `moon_elevation` | current moon azimuth / elevation |
 | `null` | hide the corner |
 
 `name` is always optional. For power values (`type: source` or entities in W/kW), set the unit per corner with `power_unit: W` or `power_unit: kW`.
@@ -398,6 +401,10 @@ Defaults: top left shows the power of the selected system, top right the sun azi
 | `sun_marker` | `arrow` | sun marker: `arrow`, `circle`, `sun`, `dot` or `none` |
 | `sun_marker_position` | `edge` | `edge` or `elevation` (at sun elevation) |
 | `sun_marker_color` | `#f57c00` | sun marker color |
+| `moon_marker` | `none` | `moon` (moon symbol showing the current phase), `dot` or `none` |
+| `moon_marker_position` | `edge` | `edge` or `elevation` (at moon elevation) |
+| `moon_marker_color` | `#fff8dc` | color of the lit part of the moon |
+| `moon_below_horizon` | `false` | also show the moon below the horizon (faded) |
 | `metric` | `time` | default view: `areas`, `power`, `time`, `energy`, `avg_power`, `shading` or `clock` |
 | `show_metric_switch` | `true` | show the view switch |
 | `metrics` | all | views in the switch: `areas`, `power`, `time`, `energy`, `avg_power`, `shading`, `clock` |
@@ -523,6 +530,7 @@ mode: single
 
 | Version | Changes |
 |---|---|
+| **1.19.0** | 🌙 Moon in the rose: symbol with the real moon phase, at the edge or at moon elevation (`moon_marker`, `moon_marker_position`, `moon_marker_color`, `moon_below_horizon`); new corner values moon phase, illumination, moon azimuth and elevation – calculated locally, no sensor needed |
 | **1.18.0** | ▦ button on the card to show/hide the areas in the house image (`area_toggle`) |
 | **1.17.0** | New “Areas” view (strings in the image only, no bars); summary row per area + total (`area_summary`); corner value “Total power of all systems” (`type: total`); clearer hints for areas |
 | **1.16.0** | Areas with their own string sensor (`source`, W/kW automatic) linked to a system (`system`, `kwp`); systems made of several sensors (`entities`); entity IDs without “sensor.” are completed |

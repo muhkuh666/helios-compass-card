@@ -4,7 +4,7 @@
  *
  * Installation: siehe README.md
  */
-const CARD_VERSION = '1.18.0';
+const CARD_VERSION = '1.19.0';
 
 /* ---------- Sprache / Language ---------- */
 let LANG = 'de';
@@ -47,6 +47,8 @@ const I18N = {
     avg_tip: 'Ø {p} bei Sonne aus dieser Richtung ({pct} % der Sonnenzeit)',
     path_today: 'Sonnenbahn heute', path_on: 'Sonnenbahn am {d}', sunrise: 'Aufgang', sunset: 'Untergang',
     noon: 'Mittagshöhe {e}° um {t}', dist_note: 'Abstand zur Mitte = Sonnenhöhe (Rand = Horizont)',
+    moon_tip: 'Mond: Azimut {a}°, Höhe {e}° · {p} ({i} % beleuchtet)', moon_azimuth: 'Mondazimut', moon_elevation: 'Mondhöhe', moon_phase: 'Mondphase', moon_illum: 'Mond beleuchtet',
+    moon_p0: 'Neumond', moon_p1: 'Zunehmende Sichel', moon_p2: 'Zunehmender Halbmond', moon_p3: 'Zunehmender Mond', moon_p4: 'Vollmond', moon_p5: 'Abnehmender Mond', moon_p6: 'Abnehmender Halbmond', moon_p7: 'Abnehmende Sichel',
     sun_tip: 'Sonne: Azimut {a}°, Höhe {e}°', sun_now: 'Sonne jetzt: Azimut {a}°, Höhe {e}°',
     array: 'Modulfeld', azimuth: 'Azimut',
     card_desc: 'Sonnenrichtung, PV-Leistung und Ertrag über dem Luftbild des Hauses',
@@ -79,6 +81,8 @@ const I18N = {
     avg_tip: 'Avg {p} with sun from this direction ({pct} % of sun time)',
     path_today: 'Sun path today', path_on: 'Sun path on {d}', sunrise: 'Sunrise', sunset: 'Sunset',
     noon: 'Max elevation {e}° at {t}', dist_note: 'Distance from center = sun elevation (edge = horizon)',
+    moon_tip: 'Moon: azimuth {a}°, elevation {e}° · {p} ({i} % illuminated)', moon_azimuth: 'Moon azimuth', moon_elevation: 'Moon elevation', moon_phase: 'Moon phase', moon_illum: 'Moon illuminated',
+    moon_p0: 'New moon', moon_p1: 'Waxing crescent', moon_p2: 'First quarter', moon_p3: 'Waxing gibbous', moon_p4: 'Full moon', moon_p5: 'Waning gibbous', moon_p6: 'Last quarter', moon_p7: 'Waning crescent',
     sun_tip: 'Sun: azimuth {a}°, elevation {e}°', sun_now: 'Sun now: azimuth {a}°, elevation {e}°',
     array: 'Array', azimuth: 'Azimuth',
     card_desc: 'Sun direction, PV power and yield over an aerial image of your house',
@@ -169,6 +173,10 @@ const DEFAULTS = {
   sun_marker: 'arrow', // 'arrow' | 'circle' | 'sun' | 'dot' | 'none'
   sun_marker_position: 'edge', // 'edge' | 'elevation'
   sun_marker_color: '#f57c00',
+  moon_marker: 'none', // 'moon' (Symbol mit Mondphase) | 'dot' | 'none'
+  moon_marker_position: 'edge', // 'edge' | 'elevation'
+  moon_marker_color: '#fff8dc',
+  moon_below_horizon: false, // Mond auch unter dem Horizont (blass) zeigen
   power_style: 'both', // Ansicht Leistung: 'both' | 'line' | 'dots' | 'area' | 'bars'
   sector_labels: false, // Werte an den Balkenspitzen anzeigen
   sector_labels_min: 20,
@@ -204,6 +212,69 @@ function sunPosition(date, lat, lon) {
   const az = Math.atan2(Math.sin(H), Math.cos(H) * Math.sin(phi) - Math.tan(dec) * Math.cos(phi));
   const alt = Math.asin(Math.sin(phi) * Math.sin(dec) + Math.cos(phi) * Math.cos(dec) * Math.cos(H));
   return { azimuth: (az / rad + 540) % 360, elevation: alt / rad };
+}
+
+/* ---------- Mondstand und Mondphase (nach SunCalc) ---------- */
+function moonData(date, lat, lon) {
+  const rad = Math.PI / 180;
+  const e = rad * 23.4397;
+  const d = date.valueOf() / 86400000 - 0.5 + 2440588 - 2451545;
+  const ra = (l, b) => Math.atan2(Math.sin(l) * Math.cos(e) - Math.tan(b) * Math.sin(e), Math.cos(l));
+  const decl = (l, b) => Math.asin(Math.sin(b) * Math.cos(e) + Math.cos(b) * Math.sin(e) * Math.sin(l));
+  // Mond
+  const Lm = rad * (218.316 + 13.176396 * d);
+  const Mm = rad * (134.963 + 13.064993 * d);
+  const F = rad * (93.272 + 13.229350 * d);
+  const l = Lm + rad * 6.289 * Math.sin(Mm);
+  const b = rad * 5.128 * Math.sin(F);
+  const dist = 385001 - 20905 * Math.cos(Mm);
+  const mRa = ra(l, b);
+  const mDec = decl(l, b);
+  // Sonne
+  const Ms = rad * (357.5291 + 0.98560028 * d);
+  const C = rad * (1.9148 * Math.sin(Ms) + 0.02 * Math.sin(2 * Ms) + 0.0003 * Math.sin(3 * Ms));
+  const Ls = Ms + C + rad * 102.9372 + Math.PI;
+  const sRa = ra(Ls, 0);
+  const sDec = decl(Ls, 0);
+  // Position
+  const phi = rad * lat;
+  const H = rad * (280.16 + 360.9856235 * d) + rad * lon - mRa;
+  let alt = Math.asin(Math.sin(phi) * Math.sin(mDec) + Math.cos(phi) * Math.cos(mDec) * Math.cos(H));
+  const az = Math.atan2(Math.sin(H), Math.cos(H) * Math.sin(phi) - Math.tan(mDec) * Math.cos(phi));
+  const hh = Math.max(alt, 0);
+  alt += 0.0002967 / Math.tan(hh + 0.00312536 / (hh + 0.08901179)); // Refraktion
+  // Beleuchtung
+  const sdist = 149598000;
+  const psi = Math.acos(Math.sin(sDec) * Math.sin(mDec) + Math.cos(sDec) * Math.cos(mDec) * Math.cos(sRa - mRa));
+  const inc = Math.atan2(sdist * Math.sin(psi), dist - sdist * Math.cos(psi));
+  const ang = Math.atan2(Math.cos(sDec) * Math.sin(sRa - mRa), Math.sin(sDec) * Math.cos(mDec) - Math.cos(sDec) * Math.sin(mDec) * Math.cos(sRa - mRa));
+  return {
+    azimuth: (az / rad + 540) % 360,
+    elevation: alt / rad,
+    fraction: (1 + Math.cos(inc)) / 2,
+    phase: 0.5 + (0.5 * inc * (ang < 0 ? -1 : 1)) / Math.PI, // 0 Neumond · 0.25 zun. Halbmond · 0.5 Vollmond · 0.75 abn. Halbmond
+  };
+}
+function moonPhaseName(p) {
+  const i = Math.round(((p % 1 + 1) % 1) * 8) % 8;
+  return t(`moon_p${i}`);
+}
+/* Mond-Symbol mit beleuchtetem Teil (Nordhalbkugel-Ansicht, Süd gespiegelt) */
+function moonSymbol(x, y, r, phase, col, south) {
+  const p = ((phase % 1) + 1) % 1;
+  const f = (v) => v.toFixed(2);
+  const rx = Math.abs(Math.cos(2 * Math.PI * p)) * r;
+  const waxing = p < 0.5;
+  const crescent = p < 0.25 || p > 0.75;
+  let lit;
+  if (Math.abs(p - 0.5) < 0.02) lit = `<circle cx="0" cy="0" r="${r}" fill="${col}"/>`;
+  else if (p < 0.02 || p > 0.98) lit = '';
+  else {
+    const s1 = waxing ? 1 : 0;
+    const s2 = waxing ? (crescent ? 0 : 1) : (crescent ? 1 : 0);
+    lit = `<path d="M0,${f(-r)} A${r},${r} 0 0 ${s1} 0,${f(r)} A${f(rx)},${r} 0 0 ${s2} 0,${f(-r)} Z" fill="${col}"/>`;
+  }
+  return `<g transform="translate(${f(x)},${f(y)})${south ? ' scale(-1,1)' : ''}"><circle cx="0" cy="0" r="${r}" fill="#37474f" stroke="#fff" stroke-width="1"/>${lit}</g>`;
 }
 
 /* ---------- Hilfsfunktionen ---------- */
@@ -434,6 +505,11 @@ class HeliosCompassCard extends HTMLElement {
   _location() {
     const c = this._hass.config || {};
     return { lat: Number(this._config.latitude ?? c.latitude ?? 51), lon: Number(this._config.longitude ?? c.longitude ?? 10) };
+  }
+
+  _moonNow() {
+    const { lat, lon } = this._location();
+    return { ...moonData(new Date(), lat, lon), south: lat < 0 };
   }
 
   _sunNow() {
@@ -840,7 +916,8 @@ class HeliosCompassCard extends HTMLElement {
     this.shadowRoot.querySelectorAll('.corner').forEach((el) => el.addEventListener('click', () => {
       const cfg = c.corners[el.dataset.pos];
       const entityId = cfg?.entity || (['source', 'utilization'].includes(cfg?.type) ? this._src().entities[0]
-        : cfg?.type === 'energy_today' ? (this._src().energy[0] || this._src().entities[0]) : cfg?.type ? c.sun_entity : null);
+        : cfg?.type === 'energy_today' ? (this._src().energy[0] || this._src().entities[0])
+          : cfg?.type?.startsWith('moon_') ? (this._hass.states['sensor.moon_phase'] ? 'sensor.moon_phase' : null) : cfg?.type ? c.sun_entity : null);
       if (!entityId) return;
       this.dispatchEvent(new CustomEvent('hass-more-info', { detail: { entityId }, bubbles: true, composed: true }));
     }));
@@ -1709,6 +1786,13 @@ class HeliosCompassCard extends HTMLElement {
     if (!cfg) return '';
     if (cfg.type === 'azimuth') return `${Math.round(sun.azimuth)}°`;
     if (cfg.type === 'elevation') return `${Math.round(sun.elevation)}°`;
+    if (cfg.type?.startsWith('moon_')) {
+      const m = this._moonNow();
+      if (cfg.type === 'moon_azimuth') return `${Math.round(m.azimuth)}°`;
+      if (cfg.type === 'moon_elevation') return `${Math.round(m.elevation)}°`;
+      if (cfg.type === 'moon_phase') return moonPhaseName(m.phase);
+      if (cfg.type === 'moon_illum') return `${Math.round(m.fraction * 100)} %`;
+    }
     const pu = cfg.power_unit && cfg.power_unit !== 'auto' ? cfg.power_unit : this._config.power_unit;
     if (cfg.type === 'source') return fmtP(this._livePower(), pu, '', cfg.decimals);
     if (cfg.type === 'total') return fmtP(this._totalPower(), pu, '', cfg.decimals);
@@ -1740,7 +1824,7 @@ class HeliosCompassCard extends HTMLElement {
     const power = this._livePower(src);
     const allP = c.show_utilization ? c.sources.map((x) => this._livePower(x)).join(',') : '';
     const cellSig = c.areas.flatMap((a) => [...Object.values(a.cell_sensors || {}), normEnt(a.source)]).map((e) => this._hass.states[e]?.state).join(',');
-    const sig = `${cellSig}|${allP}|${this._showPaths}|${this._sourceId}|${sun.azimuth.toFixed(1)}|${sun.elevation.toFixed(1)}|${power}|${src.energy.map((e) => this._hass.states[e]?.state).join(',')}|`
+    const sig = `${c.moon_marker !== 'none' ? Math.floor(Date.now() / 120000) : ''}|${cellSig}|${allP}|${this._showPaths}|${this._sourceId}|${sun.azimuth.toFixed(1)}|${sun.elevation.toFixed(1)}|${power}|${src.energy.map((e) => this._hass.states[e]?.state).join(',')}|`
       + Object.values(c.corners).map((x) => (x?.entity ? this._hass.states[x.entity]?.state : '')).join('|');
     if (!force && sig === this._sig) return;
     this._sig = sig;
@@ -1751,6 +1835,7 @@ class HeliosCompassCard extends HTMLElement {
       if (lbl === undefined || lbl === null) {
         if (cfg?.type === 'source') lbl = c.sources.length > 1 && src.name ? t('power_of', { name: src.name }) : t('pv_power');
         else if (cfg?.type === 'total') lbl = t('total_power');
+        else if (cfg?.type?.startsWith('moon_')) lbl = t(cfg.type);
         else if (cfg?.type === 'utilization') lbl = c.sources.length > 1 && src.name ? t('util_of', { name: src.name }) : t('utilization');
         else if (cfg?.type === 'energy_today') lbl = c.sources.length > 1 && src.name ? t('today_of', { name: src.name }) : t('yield_today');
         else lbl = cfg?.entity ? this._hass.states[cfg.entity]?.attributes.friendly_name : '';
@@ -1811,6 +1896,21 @@ class HeliosCompassCard extends HTMLElement {
       sunSvg += `<circle cx="${f(sx)}" cy="${f(sy)}" r="5" fill="#ffc107" stroke="#fff" stroke-width="1.5"
         filter="drop-shadow(0 0 3px rgba(255,170,0,.9))"><title>${t('sun_now', { a: a.toFixed(0), e: sun.elevation.toFixed(0) })}</title></circle>`;
     }
+    if (style !== 'clock' && c.moon_marker && c.moon_marker !== 'none') {
+      const m = this._moonNow();
+      const mUp = m.elevation > 0;
+      if (mUp || c.moon_below_horizon) {
+        const mElev = c.moon_marker_position === 'elevation';
+        const [mx, my] = this._xy(m.azimuth, mElev ? (1 - Math.max(0, m.elevation) / 90) * R : R + 8);
+        const mcol = c.moon_marker_color || '#fff8dc';
+        const mtip = `<title>${t('moon_tip', { a: m.azimuth.toFixed(0), e: m.elevation.toFixed(0), p: moonPhaseName(m.phase), i: Math.round(m.fraction * 100) })}</title>`;
+        const op = mUp ? 1 : 0.4;
+        const glow = mUp ? 'filter="drop-shadow(0 0 2.5px rgba(200,220,255,.9))"' : '';
+        sunSvg = (c.moon_marker === 'dot'
+          ? `<circle cx="${f(mx)}" cy="${f(my)}" r="3.5" fill="${mcol}" stroke="#607d8b" stroke-width="1" opacity="${op}" ${glow}>${mtip}</circle>`
+          : `<g opacity="${op}" ${glow}>${mtip}${moonSymbol(mx, my, 5.5, m.phase, mcol, m.south)}</g>`) + sunSvg;
+      }
+    }
     this.shadowRoot.querySelector('g.sun').innerHTML = sunSvg;
     if (this._pathsDay && this._pathsDay !== new Date().toDateString()) this._renderSunPaths();
 
@@ -1857,7 +1957,7 @@ const LABELS_EN = {
   language: 'Language',
   source: 'Power sensor of this area (W or kW)', system: 'Belongs to system', g_rot: 'Grid rotation', g_w: 'Panel width', g_h: 'Panel height', g_x: 'Move grid ↔', g_y: 'Move grid ↕', cell_entity: 'Sensor for the next panel', area_labels: 'Labels on the areas', area_toggle: '▦ button on the card to show/hide the areas', area_summary: 'Summary row (power per area + total)',
   power_unit: 'Power unit (W/kW)', show_utilization: 'Utilization row (% per system)', utilization_base: 'Utilization based on',
-  sun_marker: 'Sun marker', sun_marker_position: 'Sun marker position', sun_marker_color: 'Sun marker color',
+  sun_marker: 'Sun marker', sun_marker_position: 'Sun marker position', sun_marker_color: 'Sun marker color', moon_marker: 'Moon marker', moon_marker_position: 'Moon marker position', moon_marker_color: 'Color of the lit moon', moon_below_horizon: 'Show moon below the horizon (faded)',
   energy_display: '“Yield” view shows', power_style: '“Power” view shows', sector_labels: 'Values at the bars', label_toggle: '% button on the card to show/hide values', sector_labels_min: 'Label bars from (% of largest)',
   title: 'Title (empty = no title)', power_entity: 'PV power sensor', max_power: 'Max. power', legend_label: 'Color scale label',
   metric: 'Default view', default_range: 'Default period', ranges: 'Visible period buttons', sectors: 'Number of direction sectors',
@@ -1902,7 +2002,7 @@ LABELS = {
   language: 'Sprache',
   source: 'Leistungssensor dieser Fläche (W oder kW)', system: 'Gehört zu Anlage', g_rot: 'Raster-Drehung', g_w: 'Modul-Breite', g_h: 'Modul-Höhe', g_x: 'Raster verschieben ↔', g_y: 'Raster verschieben ↕', cell_entity: 'Sensor für das nächste Modul', area_labels: 'Beschriftung auf den Flächen', area_toggle: '▦-Knopf in der Karte zum Ein-/Ausblenden der Flächen', area_summary: 'Summenzeile (Leistung je Fläche + Gesamt)',
   power_unit: 'Leistungseinheit (W/kW)', show_utilization: 'Auslastungszeile (% je Anlage)', utilization_base: 'Auslastung bezogen auf',
-  sun_marker: 'Sonnenmarker', sun_marker_position: 'Position des Sonnenmarkers', sun_marker_color: 'Farbe des Sonnenmarkers',
+  sun_marker: 'Sonnenmarker', sun_marker_position: 'Position des Sonnenmarkers', sun_marker_color: 'Farbe des Sonnenmarkers', moon_marker: 'Mondmarker', moon_marker_position: 'Position des Mondmarkers', moon_marker_color: 'Farbe des beleuchteten Monds', moon_below_horizon: 'Mond auch unter dem Horizont zeigen (blass)',
   energy_display: 'Ansicht „Ertrag“ zeigt', power_style: 'Ansicht „Leistung“ zeigt', sector_labels: 'Werte an den Balken', label_toggle: '%-Knopf in der Karte zum Ein-/Ausblenden der Werte', sector_labels_min: 'Beschriften ab (% des größten Balkens)',
   title: 'Titel (leer = kein Titel)',
   power_entity: 'PV-Leistungssensor',
@@ -2022,6 +2122,16 @@ SECTIONS = [
         { value: 'edge', label: L('Am Rand', 'At the edge') }, { value: 'elevation', label: L('Auf Sonnenhöhe', 'At sun elevation') }] } } },
     ] },
     { name: 'sun_marker_color', selector: COLOR },
+    { type: 'grid', name: '', schema: [
+      { name: 'moon_marker', selector: { select: { mode: 'dropdown', options: [
+        { value: 'none', label: L('Aus', 'Off') }, { value: 'moon', label: L('Mondsymbol mit Phase 🌓', 'Moon symbol with phase 🌓') }, { value: 'dot', label: L('Punkt', 'Dot') }] } } },
+      { name: 'moon_marker_position', selector: { select: { mode: 'dropdown', options: [
+        { value: 'edge', label: L('Am Rand', 'At the edge') }, { value: 'elevation', label: L('Auf Mondhöhe', 'At moon elevation') }] } } },
+    ] },
+    { type: 'grid', name: '', schema: [
+      { name: 'moon_marker_color', selector: COLOR },
+      { name: 'moon_below_horizon', selector: { boolean: {} } },
+    ] },
     { name: 'season_overlay', selector: { boolean: {} } },
     { name: 'show_sun_paths', selector: { boolean: {} } },
     { name: 'sun_path_toggle', selector: { boolean: {} } },
@@ -2070,7 +2180,10 @@ CORNER_SCHEMA = [
     { value: 'total', label: L('Gesamtleistung aller Anlagen', 'Total power of all systems') },
     { value: 'utilization', label: L('Auslastung der gewählten Anlage (%)', 'Utilization of the selected system (%)') },
     { value: 'entity', label: L('Beliebige Entität', 'Any entity') },
-    { value: 'azimuth', label: L('Sonnenazimut', 'Sun azimuth') }, { value: 'elevation', label: L('Sonnenhöhe', 'Sun elevation') }, { value: 'none', label: L('Ausblenden', 'Hide') }] } } },
+    { value: 'azimuth', label: L('Sonnenazimut', 'Sun azimuth') }, { value: 'elevation', label: L('Sonnenhöhe', 'Sun elevation') },
+    { value: 'moon_phase', label: L('Mondphase', 'Moon phase') }, { value: 'moon_illum', label: L('Mond beleuchtet (%)', 'Moon illuminated (%)') },
+    { value: 'moon_azimuth', label: L('Mondazimut', 'Moon azimuth') }, { value: 'moon_elevation', label: L('Mondhöhe', 'Moon elevation') },
+    { value: 'none', label: L('Ausblenden', 'Hide') }] } } },
   { name: 'name', selector: { text: {} } },
 ];
 CORNER_ENTITY_SCHEMA = [
