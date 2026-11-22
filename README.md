@@ -5,7 +5,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
 [![Validate](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml/badge.svg)](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml)
 ![License](https://img.shields.io/github/license/muhkuh666/helios-compass-card)
-![Version](https://img.shields.io/badge/version-1.15.0-orange.svg)
+![Version](https://img.shields.io/badge/version-1.16.0-orange.svg)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-muhkuh666-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/muhkuh666)
 
 **A solar compass for Home Assistant.** This card shows which compass direction your solar system gets its power from. Each sector of the rose is a sun direction. Colors show power classes, and the sector length shows the share of time or yield. An aerial image of your house can sit underneath.
@@ -184,7 +184,9 @@ Alternatively: **✎ Free drawing**. Click the corners, drag points to move them
 ```yaml
 areas:
   - name: String 1
-    source: sensor.pv1_power         # sensor of a system or "total"
+    source: sensor.h3_6kw_pv1_power  # own power sensor of the area (W or kW) – or the sensor of a system
+    system: sensor.pv_power          # belongs to system (highlight, tap, utilization)
+    kwp: 3.55                        # optional, for the area's utilization
     color: "#f05a28"
     azimuth: 110                     # optional, for ☀/☁
     tilt: 35
@@ -197,6 +199,8 @@ areas:
       - [[4.0,43.6],[13.3,46.2],[12.7,50.8],[3.5,48.2]]
 area_labels: true
 ```
+
+**Sub-strings:** if a system consists of several strings (e.g. PV = PV-1 + PV-2), give each area its **own string sensor** as `source` and the system as `system`. W and kW are converted automatically. Without `kwp`, the system's utilization base is split evenly across its areas.
 
 Coordinates refer to the image (0–100 = image width). If you rotate, move or scale the house image, the areas move with it. The areas are hidden in the “Clock” view.
 
@@ -441,7 +445,8 @@ Defaults: top left shows the power of the selected system, top right the sun azi
 
 | Option | Description |
 |---|---|
-| `entity` | **required**, power sensor (W or kW) |
+| `entity` | **required**¹, power sensor (W or kW) |
+| `entities` | ¹ alternatively: list of several sensors that are added up (e.g. PV-1 + PV-2), W and kW can be mixed |
 | `name` | name in the switch and the legend |
 | `max_power` | upper limit of this system's power classes |
 | `kwp` | system size in kWp (for kWh/kWp) |
@@ -514,6 +519,7 @@ mode: single
 
 | Version | Changes |
 |---|---|
+| **1.16.0** | Areas with their own string sensor (`source`, W/kW automatic) linked to a system (`system`, `kwp`); systems made of several sensors (`entities`); entity IDs without “sensor.” are completed |
 | **1.15.0** | Mark strings in the house image: rotatable grid with brush/eraser or free drawing; areas colored live by utilization, ☀/☁ from orientation, tapping selects the system; optional sensor per panel |
 | **1.14.0** | New “Clock” view: heatmap with time of day as angle and days/weeks as rings, line for “now” |
 | **1.13.0** | % button on the card to show/hide bar values (`label_toggle`); more compact view switch; shows “1.00 kWh” instead of “1,000 Wh” |

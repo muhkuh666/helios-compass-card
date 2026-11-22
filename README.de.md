@@ -5,7 +5,7 @@
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
 [![Validate](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml/badge.svg)](https://github.com/muhkuh666/helios-compass-card/actions/workflows/validate.yml)
 ![Lizenz](https://img.shields.io/github/license/muhkuh666/helios-compass-card)
-![Version](https://img.shields.io/badge/version-1.15.0-orange.svg)
+![Version](https://img.shields.io/badge/version-1.16.0-orange.svg)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-muhkuh666-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/muhkuh666)
 
 **PV-Sonnenkompass für Home Assistant.** Die Karte zeigt, aus welcher Himmelsrichtung deine Solaranlage wie viel liefert. Jeder Sektor der Rose steht für eine Sonnenrichtung. Die Farben zeigen die Leistungsklassen, die Länge den Anteil an Zeit oder Ertrag. Darunter liegt auf Wunsch ein Luftbild deines Hauses.
@@ -184,7 +184,9 @@ Alternativ: **✎ Frei zeichnen**. Du klickst die Ecken an, Punkte lassen sich z
 ```yaml
 areas:
   - name: Strang 1
-    source: sensor.pv1_leistung      # Sensor einer Anlage oder "total"
+    source: sensor.h3_6kw_pv1_power  # eigener Leistungssensor der Fläche (W oder kW) – oder Sensor einer Anlage
+    system: sensor.pv_ist_w          # gehört zu Anlage (Hervorhebung, Antippen, Auslastung)
+    kwp: 3.55                        # optional, für die Auslastung der Fläche
     color: "#f05a28"
     azimuth: 110                     # optional, für ☀/☁
     tilt: 35
@@ -197,6 +199,8 @@ areas:
       - [[4.0,43.6],[13.3,46.2],[12.7,50.8],[3.5,48.2]]
 area_labels: true
 ```
+
+**Teil-Stränge:** Besteht eine Anlage aus mehreren Strängen (z. B. PV = PV-1 + PV-2), gib jeder Fläche ihren **eigenen Strang-Sensor** als `source` und die Anlage als `system`. W und kW werden automatisch umgerechnet. Ohne `kwp` wird die Auslastung aus der Anlage gleichmäßig auf ihre Flächen verteilt.
 
 Die Koordinaten beziehen sich auf das Bild (0–100 = Bildbreite). Drehst, verschiebst oder skalierst du das Hausbild, wandern die Flächen mit. In der Ansicht „Uhr“ sind die Flächen ausgeblendet.
 
@@ -441,7 +445,8 @@ Die Standardbelegung: oben links die Leistung der gewählten Anlage, oben rechts
 
 | Option | Beschreibung |
 |---|---|
-| `entity` | **Pflicht**, Leistungssensor (W oder kW) |
+| `entity` | **Pflicht**¹, Leistungssensor (W oder kW) |
+| `entities` | ¹ alternativ: Liste mehrerer Sensoren, die addiert werden (z. B. PV-1 + PV-2), W und kW gemischt möglich |
 | `name` | Name im Umschalter und in der Legende |
 | `max_power` | Obergrenze der Leistungsklassen dieser Anlage |
 | `kwp` | Anlagenleistung in kWp (für kWh/kWp) |
@@ -515,6 +520,7 @@ mode: single
 
 | Version | Änderungen |
 |---|---|
+| **1.16.0** | Flächen mit eigenem Strang-Sensor (`source`, W/kW automatisch) und Zuordnung zur Anlage (`system`, `kwp`); Anlagen aus mehreren Sensoren (`entities`); Sensor-IDs ohne „sensor.“ werden ergänzt |
 | **1.15.0** | Stränge im Hausbild markieren: drehbares Raster mit Pinsel/Radierer oder frei zeichnen; Flächen live nach Auslastung eingefärbt, ☀/☁ aus Ausrichtung, Antippen wählt die Anlage; optional Sensor je Modul |
 | **1.14.0** | Neue Ansicht „Uhr“: Heatmap mit Uhrzeit als Winkel und Tagen/Wochen als Ringe, Linie für „jetzt“ |
 | **1.13.0** | %-Knopf in der Karte zum Ein-/Ausblenden der Balkenwerte (`label_toggle`); kompakterer Umschalter; Anzeige „1,00 kWh“ statt „1.000 Wh“ |

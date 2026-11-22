@@ -4,7 +4,7 @@
  *
  * Installation: siehe README.md
  */
-const CARD_VERSION = '1.15.0';
+const CARD_VERSION = '1.16.0';
 
 /* ---------- Sprache / Language ---------- */
 let LANG = 'de';
@@ -244,6 +244,10 @@ function fmtP(w, unit = POWER_UNIT, sep = ' ', dec) {
 const fmtPower = (w) => fmtP(w);
 const fmtEnergy = (wh) => (Math.round(wh) >= 1000 ? `${fmtNum(wh / 1000, wh >= 100000 ? 0 : wh >= 10000 ? 1 : 2)} kWh` : `${fmtNum(wh)} Wh`);
 
+/** Entitäts-ID ergänzen: „h3_pv1_power“ → „sensor.h3_pv1_power“ */
+const normEnt = (e) => (e && typeof e === 'string' && e !== 'total' && !e.includes('.') ? `sensor.${e}` : e);
+const entList = (x) => (Array.isArray(x) ? x : x ? [x] : []).map(normEnt).filter(Boolean);
+
 /** Raster-Zellen und freie Polygone einer Fläche in Bildkoordinaten */
 function gridCell(grid, i, j) {
   const r = ((Number(grid.rotation) || 0) * Math.PI) / 180;
@@ -289,7 +293,7 @@ class HeliosCompassCard extends HTMLElement {
   setConfig(config) {
     this._rawConfig = config;
     detectLang(this._hass, config?.language);
-    const hasSources = Array.isArray(config?.sources) && config.sources.some((x) => x && x.entity);
+    const hasSources = Array.isArray(config?.sources) && config.sources.some((x) => x && (x.entity || (Array.isArray(x.entities) && x.entities.length)));
     if (!config || (!config.power_entity && !hasSources)) {
       throw new Error(t('err_config'));
     }
@@ -305,16 +309,16 @@ class HeliosCompassCard extends HTMLElement {
     const kwpOf = (mods) => mods.reduce((a, m) => a + (Number(m.kwp) || 0), 0);
     c.elevation_bands = Math.max(3, Math.min(30, Math.round(Number(c.elevation_bands) || 9)));
     c.sun_paths = Array.isArray(c.sun_paths) ? c.sun_paths.filter((k) => SUN_PATHS[k]) : DEFAULTS.sun_paths;
-    const raw = hasSources ? config.sources.filter((x) => x && x.entity) : [{ entity: config.power_entity }];
+    const raw = hasSources ? config.sources.filter((x) => x && (x.entity || (Array.isArray(x.entities) && x.entities.length))) : [{ entity: config.power_entity }];
     c.sources = raw.map((x) => {
       const max = Number(x.max_power) || c.max_power;
       const ownMods = Array.isArray(x.modules) ? x.modules.filter(validModule) : [];
       const kwp = Number(x.kwp) || (hasSources ? kwpOf(ownMods) : 0) || (!hasSources ? Number(config.kwp) || kwpOf(globalModules) : 0);
       return {
         kwp,
-        energy: x.energy_entity ? [x.energy_entity] : (!hasSources && config.energy_entity ? [config.energy_entity] : []),
-        id: x.entity,
-        entities: [x.entity],
+        energy: x.energy_entity || x.energy_entities ? entList(x.energy_entities || x.energy_entity) : (!hasSources && config.energy_entity ? entList(config.energy_entity) : []),
+        id: normEnt(x.entity) || entList(x.entities).join('+'),
+        entities: x.entities && x.entities.length ? entList(x.entities) : entList(x.entity),
         name: x.name || '',
         max_power: max,
         color_stops: makeStops(Array.isArray(x.color_stops) ? x.color_stops : (x.max_power ? null : config.color_stops), max),
@@ -933,10 +937,33 @@ class HeliosCompassCard extends HTMLElement {
     return { pt, k };
   }
 
-  _areaSource(area) {
+  _findSystem(ref) {
     const srcs = this._config.sources;
-    if (area.source === 'total') return srcs.find((x) => x.total) || null;
-    return srcs.find((x) => !x.total && (x.id === area.source || x.entities.includes(area.source))) || null;
+    if (!ref) return null;
+    if (ref === 'total') return srcs.find((x) => x.total) || null;
+    const e = normEnt(ref);
+    return srcs.find((x) => !x.total && (x.id === e || x.entities.includes(e))) || null;
+  }
+
+  _areaSource(area) { return this._findSystem(area.system) || this._findSystem(area.source); }
+
+  /** Leistung und Bezugsgröße einer Fläche: eigener Sensor (W/kW) oder ganze Anlage */
+  _areaInfo(area) {
+    const c = this._config;
+    const own = this._findSystem(area.source);
+    const sys = this._findSystem(area.system) || own;
+    if (own) return { sys, power: this._livePower(own), base: Number(area.kwp) > 0 ? area.kwp * 1000 : this._utilBase(own) };
+    const ent = normEnt(area.source);
+    const st = ent ? this._hass.states[ent] : null;
+    const power = st ? (parseFloat(st.state) || 0) * this._factor(ent) : null;
+    let base = 0;
+    if (Number(area.kwp) > 0) base = Number(area.kwp) * 1000;
+    else if (Number(area.max_power) > 0) base = Number(area.max_power);
+    else if (sys) {
+      const siblings = c.areas.filter((a) => this._findSystem(a.system) === sys && !this._findSystem(a.source)).length || 1;
+      base = this._utilBase(sys) / siblings;
+    }
+    return { sys, power, base };
   }
 
   _areaSun(area, src) {
@@ -962,11 +989,11 @@ class HeliosCompassCard extends HTMLElement {
     let svg = '';
     let labels = '';
     c.areas.forEach((area, ai) => {
-      const src = this._areaSource(area);
+      const info = this._areaInfo(area);
+      const src = info.sys;
       const col = area.color || '#f5a623';
-      const power = src ? this._livePower(src) : null;
-      const base = src ? this._utilBase(src) : 0;
-      const util = src && base > 0 ? (power / base) * 100 : null;
+      const { power, base } = info;
+      const util = power !== null && base > 0 ? (power / base) * 100 : null;
       const lit = this._areaSun(area, src);
       const sel = src && src.id === this._sourceId;
       const shapes = areaShapes(area);
@@ -1647,7 +1674,7 @@ class HeliosCompassCard extends HTMLElement {
     const src = this._src();
     const power = this._livePower(src);
     const allP = c.show_utilization ? c.sources.map((x) => this._livePower(x)).join(',') : '';
-    const cellSig = c.areas.flatMap((a) => Object.values(a.cell_sensors || {})).map((e) => this._hass.states[e]?.state).join(',');
+    const cellSig = c.areas.flatMap((a) => [...Object.values(a.cell_sensors || {}), normEnt(a.source)]).map((e) => this._hass.states[e]?.state).join(',');
     const sig = `${cellSig}|${allP}|${this._showPaths}|${this._sourceId}|${sun.azimuth.toFixed(1)}|${sun.elevation.toFixed(1)}|${power}|${src.energy.map((e) => this._hass.states[e]?.state).join(',')}|`
       + Object.values(c.corners).map((x) => (x?.entity ? this._hass.states[x.entity]?.state : '')).join('|');
     if (!force && sig === this._sig) return;
@@ -1761,7 +1788,7 @@ let SOURCE_SCHEMA; let MODULE_SCHEMA; let STOP_SCHEMA; let TOTAL_SCHEMA;
 
 const LABELS_EN = {
   language: 'Language',
-  source: 'System / sensor', g_rot: 'Grid rotation', g_w: 'Panel width', g_h: 'Panel height', g_x: 'Move grid ↔', g_y: 'Move grid ↕', cell_entity: 'Sensor for the next panel', area_labels: 'Labels on the areas',
+  source: 'Power sensor of this area (W or kW)', system: 'Belongs to system', g_rot: 'Grid rotation', g_w: 'Panel width', g_h: 'Panel height', g_x: 'Move grid ↔', g_y: 'Move grid ↕', cell_entity: 'Sensor for the next panel', area_labels: 'Labels on the areas',
   power_unit: 'Power unit (W/kW)', show_utilization: 'Utilization row (% per system)', utilization_base: 'Utilization based on',
   sun_marker: 'Sun marker', sun_marker_position: 'Sun marker position', sun_marker_color: 'Sun marker color',
   energy_display: '“Yield” view shows', power_style: '“Power” view shows', sector_labels: 'Values at the bars', label_toggle: '% button on the card to show/hide values', sector_labels_min: 'Label bars from (% of largest)',
@@ -1806,7 +1833,7 @@ const COLOR = { text: { type: 'color' } };
 
 LABELS = {
   language: 'Sprache',
-  source: 'Anlage / Sensor', g_rot: 'Raster-Drehung', g_w: 'Modul-Breite', g_h: 'Modul-Höhe', g_x: 'Raster verschieben ↔', g_y: 'Raster verschieben ↕', cell_entity: 'Sensor für das nächste Modul', area_labels: 'Beschriftung auf den Flächen',
+  source: 'Leistungssensor dieser Fläche (W oder kW)', system: 'Gehört zu Anlage', g_rot: 'Raster-Drehung', g_w: 'Modul-Breite', g_h: 'Modul-Höhe', g_x: 'Raster verschieben ↔', g_y: 'Raster verschieben ↕', cell_entity: 'Sensor für das nächste Modul', area_labels: 'Beschriftung auf den Flächen',
   power_unit: 'Leistungseinheit (W/kW)', show_utilization: 'Auslastungszeile (% je Anlage)', utilization_base: 'Auslastung bezogen auf',
   sun_marker: 'Sonnenmarker', sun_marker_position: 'Position des Sonnenmarkers', sun_marker_color: 'Farbe des Sonnenmarkers',
   energy_display: 'Ansicht „Ertrag“ zeigt', power_style: 'Ansicht „Leistung“ zeigt', sector_labels: 'Werte an den Balken', label_toggle: '%-Knopf in der Karte zum Ein-/Ausblenden der Werte', sector_labels_min: 'Beschriften ab (% des größten Balkens)',
@@ -2341,7 +2368,11 @@ class HeliosCompassCardEditor extends HTMLElement {
     if ((w.sources || []).length > 1 && w.show_total !== false) opts.push({ value: 'total', label: w.total_name || t('total') });
     const schema = [
       { type: 'grid', name: '', schema: [{ name: 'name', selector: { text: {} } }, { name: 'color', selector: COLOR }] },
-      { name: 'source', selector: { select: { mode: 'dropdown', options: opts } } },
+      { name: 'source', selector: { entity: { domain: 'sensor' } } },
+      { type: 'grid', name: '', schema: [
+        { name: 'system', selector: { select: { mode: 'dropdown', options: [{ value: '', label: L('– keine –', '– none –') }, ...opts] } } },
+        { name: 'kwp', selector: num(0.01, 1000, 0.01, 'kWp') },
+      ] },
       { type: 'grid', name: '', schema: [{ name: 'azimuth', selector: num(0, 359, 1, '°') }, { name: 'tilt', selector: num(0, 90, 1, '°') }] },
     ];
     body.append(this._hint(L(
@@ -2361,7 +2392,7 @@ class HeliosCompassCardEditor extends HTMLElement {
         return `${a.name || `${L('Fläche', 'Area')} ${i + 1}`}${n ? ` · ${n} ${t('modules_n')}` : ''}${pgs ? ` · ${pgs} ${L('Teilflächen', 'parts')}` : ''}`;
       },
       swatch: (a) => a.color,
-      newItem: () => ({ name: `${L('Strang', 'String')} ${areas.length + 1}`, color: PAL[areas.length % PAL.length], source: opts[0]?.value }),
+      newItem: () => ({ name: `${L('Strang', 'String')} ${areas.length + 1}`, color: PAL[areas.length % PAL.length], system: opts[0]?.value }),
       addLabel: L('Fläche hinzufügen', 'Add area'),
       onChange: (items, structural) => {
         if (structural && this._activeArea !== undefined && this._activeArea >= items.length) this._activeArea = undefined;
