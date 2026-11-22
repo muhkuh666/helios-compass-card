@@ -32,7 +32,7 @@ const I18N = {
     pv_power: 'PV-Leistung', total: 'Gesamt', power_of: '{name}-Leistung', today_of: '{name} heute', yield_today: 'Ertrag heute',
     sun_azimuth: 'Sonnenazimut', sun_elevation: 'Sonnenhöhe',
     err_config: 'Bitte "power_entity" oder "sources" angeben (z. B. sensor.pv_leistung).',
-    toggle_paths: 'Sonnenbahnen ein-/ausblenden', toggle_labels: 'Werte an den Balken ein-/ausblenden', toggle_areas: 'Flächen ein-/ausblenden',
+    toggle_paths: 'Sonnenbahnen ein-/ausblenden', toggle_labels: 'Werte an den Balken ein-/ausblenden', toggle_areas: 'Flächen ein-/ausblenden', toggle_moon: 'Mond und Mondbahn ein-/ausblenden',
     st_yield: 'Ertrag', st_yield_measured: 'Ertrag (gemessen)', st_peak: 'Spitze', st_best: 'Beste Richtung',
     pct_of_yield: '{pct} % des Ertrags', of_yield: 'des Ertrags', of_suntime: 'der Sonnenzeit',
     last: 'letzte {label}', last12: '{desc}, letzte 12 Mon.',
@@ -67,7 +67,7 @@ const I18N = {
     pv_power: 'PV power', total: 'Total', power_of: '{name} power', today_of: '{name} today', yield_today: 'Yield today',
     sun_azimuth: 'Sun azimuth', sun_elevation: 'Sun elevation',
     err_config: 'Please set "power_entity" or "sources" (e.g. sensor.pv_power).',
-    toggle_paths: 'Show/hide sun paths', toggle_labels: 'Show/hide values at the bars', toggle_areas: 'Show/hide areas',
+    toggle_paths: 'Show/hide sun paths', toggle_labels: 'Show/hide values at the bars', toggle_areas: 'Show/hide areas', toggle_moon: 'Show/hide moon and moon path',
     st_yield: 'Yield', st_yield_measured: 'Yield (measured)', st_peak: 'Peak', st_best: 'Best direction',
     pct_of_yield: '{pct} % of yield', of_yield: 'of yield', of_suntime: 'of sun time',
     last: 'last {label}', last12: '{desc}, last 12 mo.',
@@ -179,6 +179,7 @@ const DEFAULTS = {
   moon_marker_position: 'edge', // 'edge' | 'elevation'
   moon_marker_color: '#fff8dc',
   moon_below_horizon: false, // Mond auch unter dem Horizont (blass) zeigen
+  moon_toggle: true, // ☾-Knopf in der Karte zum Ein-/Ausblenden von Mond und Mondbahn
   moon_path: false, // Mondbahn (aktueller bzw. nächster Durchgang) mit Auf- und Untergang
   power_style: 'both', // Ansicht Leistung: 'both' | 'line' | 'dots' | 'area' | 'bars'
   sector_labels: false, // Werte an den Balkenspitzen anzeigen
@@ -448,6 +449,8 @@ class HeliosCompassCard extends HTMLElement {
     this._showPaths = c.show_sun_paths && c.sun_path_toggle && sp !== null ? sp === '1' : c.show_sun_paths;
     const sl = this._load('labels');
     this._showLabels = c.label_toggle && sl !== null ? sl === '1' : !!c.sector_labels;
+    const sm = this._load('moon');
+    this._showMoon = c.moon_toggle && sm !== null ? sm === '1' : true;
     const sa = this._load('areas');
     this._showAreas = c.area_toggle && sa !== null ? sa === '1' : true;
     const wanted = this._load('source') || (c.default_source === 'total' ? '__total' : c.default_source);
@@ -778,6 +781,8 @@ class HeliosCompassCard extends HTMLElement {
         .tgl { font: inherit; font-size:.8em; line-height:1; width:24px; height:22px; border-radius:11px; cursor:pointer; padding:0;
                border:1px solid var(--divider-color, #ccc); background:transparent; color: var(--secondary-text-color); filter: grayscale(1); opacity:.6; }
         .tgl.on { background:#fff3cd; border-color:#f5b400; filter:none; opacity:1; }
+        .tgl.mo { font-weight:700; color:#5c6bc0; }
+        .tgl.mo.on { background:#e8eaf6; border-color:#7986cb; }
         .tgl.pct, .tgl.ar { font-weight:700; color: var(--primary-text-color); }
         .tgl.pct.on { background: var(--primary-color, #03a9f4); border-color: var(--primary-color, #03a9f4); color: var(--text-primary-color, #fff); }
         .metrics button.active, .sources button.active { background: var(--primary-color, #03a9f4); color: var(--text-primary-color, #fff); }
@@ -844,12 +849,13 @@ class HeliosCompassCard extends HTMLElement {
         .yield b { color: var(--primary-text-color); font-weight:500; }
       </style>
       <ha-card>
-        ${c.title || c.show_metric_switch || c.sun_path_toggle || c.label_toggle || this._areaToggle() ? `<div class="top">
+        ${c.title || c.show_metric_switch || c.sun_path_toggle || c.label_toggle || this._areaToggle() || this._moonToggle() ? `<div class="top">
           <div class="title">${esc(c.title || '')}</div>
           <div class="tools">
             ${c.show_metric_switch && c.metrics.length > 1 ? `<div class="metrics">${c.metrics.map((k) => `<button data-m="${k}">${METRICS[k].label}</button>`).join('')}</div>` : ''}
             <span class="tgls">${c.show_sun_paths && c.sun_path_toggle && c.sun_paths.length ? `<button class="tgl" data-t="paths" title="${t('toggle_paths')}">☀</button>` : ''}
             ${c.label_toggle ? `<button class="tgl pct" data-t="labels" title="${t('toggle_labels')}">%</button>` : ''}
+            ${this._moonToggle() ? `<button class="tgl mo" data-t="moon" title="${t('toggle_moon')}">☾</button>` : ''}
             ${this._areaToggle() ? `<button class="tgl ar" data-t="areas" title="${t('toggle_areas')}">▦</button>` : ''}</span>
           </div>
         </div>` : ''}
@@ -896,6 +902,13 @@ class HeliosCompassCard extends HTMLElement {
       this._markButtons();
       this._renderPlot();
     });
+    this.shadowRoot.querySelector('.tgl[data-t="moon"]')?.addEventListener('click', () => {
+      this._showMoon = !this._showMoon;
+      this._save('moon', this._showMoon ? '1' : '0');
+      this._markButtons();
+      this._renderMoonPath();
+      this._update(true);
+    });
     this.shadowRoot.querySelector('.tgl[data-t="areas"]')?.addEventListener('click', () => {
       this._showAreas = !this._showAreas;
       this._save('areas', this._showAreas ? '1' : '0');
@@ -940,6 +953,16 @@ class HeliosCompassCard extends HTMLElement {
     this.shadowRoot.querySelector('.tgl[data-t="paths"]')?.classList.toggle('on', !!this._showPaths);
     this.shadowRoot.querySelector('.tgl[data-t="labels"]')?.classList.toggle('on', !!this._showLabels);
     this.shadowRoot.querySelector('.tgl[data-t="areas"]')?.classList.toggle('on', !!this._showAreas);
+    this.shadowRoot.querySelector('.tgl[data-t="moon"]')?.classList.toggle('on', !!this._showMoon);
+  }
+
+  _moonToggle() {
+    const c = this._config;
+    return !!(c.moon_toggle && ((c.moon_marker && c.moon_marker !== 'none') || c.moon_path));
+  }
+
+  _moonVisible() {
+    return !this._moonToggle() || this._showMoon;
   }
 
   _areaToggle() {
@@ -1277,7 +1300,7 @@ class HeliosCompassCard extends HTMLElement {
     const g = this.shadowRoot.querySelector('g.moonpath');
     if (!g) return;
     this._moonPathT = Date.now();
-    if (!c.moon_path || this._metric === 'clock') { g.innerHTML = ''; return; }
+    if (!c.moon_path || this._metric === 'clock' || !this._moonVisible()) { g.innerHTML = ''; return; }
     const { lat, lon } = this._location();
     const R = this._R();
     const rEl = (e) => (1 - Math.max(0, e) / 90) * R;
@@ -1959,7 +1982,7 @@ class HeliosCompassCard extends HTMLElement {
       sunSvg += `<circle cx="${f(sx)}" cy="${f(sy)}" r="5" fill="#ffc107" stroke="#fff" stroke-width="1.5"
         filter="drop-shadow(0 0 3px rgba(255,170,0,.9))"><title>${t('sun_now', { a: a.toFixed(0), e: sun.elevation.toFixed(0) })}</title></circle>`;
     }
-    if (style !== 'clock' && c.moon_marker && c.moon_marker !== 'none') {
+    if (style !== 'clock' && c.moon_marker && c.moon_marker !== 'none' && this._moonVisible()) {
       const m = this._moonNow();
       const mUp = m.elevation > 0;
       if (mUp || c.moon_below_horizon) {
@@ -2021,7 +2044,7 @@ const LABELS_EN = {
   language: 'Language',
   source: 'Power sensor of this area (W or kW)', system: 'Belongs to system', g_rot: 'Grid rotation', g_w: 'Panel width', g_h: 'Panel height', g_x: 'Move grid ↔', g_y: 'Move grid ↕', cell_entity: 'Sensor for the next panel', area_labels: 'Labels on the areas', area_toggle: '▦ button on the card to show/hide the areas', area_summary: 'Summary row (power per area + total)',
   power_unit: 'Power unit (W/kW)', show_utilization: 'Utilization row (% per system)', utilization_base: 'Utilization based on',
-  sun_marker: 'Sun marker', sun_marker_position: 'Sun marker position', sun_marker_color: 'Sun marker color', moon_marker: 'Moon marker', moon_marker_position: 'Moon marker position', moon_marker_color: 'Color of the lit moon', moon_below_horizon: 'Show moon below the horizon (faded)', moon_path: 'Draw moon path (with moonrise/moonset)',
+  sun_marker: 'Sun marker', sun_marker_position: 'Sun marker position', sun_marker_color: 'Sun marker color', moon_marker: 'Moon marker', moon_marker_position: 'Moon marker position', moon_marker_color: 'Color of the lit moon', moon_below_horizon: 'Show moon below the horizon (faded)', moon_path: 'Draw moon path (with moonrise/moonset)', moon_toggle: '☾ button on the card to show/hide the moon',
   energy_display: '“Yield” view shows', power_style: '“Power” view shows', sector_labels: 'Values at the bars', label_toggle: '% button on the card to show/hide values', sector_labels_min: 'Label bars from (% of largest)',
   title: 'Title (empty = no title)', power_entity: 'PV power sensor', max_power: 'Max. power', legend_label: 'Color scale label',
   metric: 'Default view', default_range: 'Default period', ranges: 'Visible period buttons', sectors: 'Number of direction sectors',
@@ -2066,7 +2089,7 @@ LABELS = {
   language: 'Sprache',
   source: 'Leistungssensor dieser Fläche (W oder kW)', system: 'Gehört zu Anlage', g_rot: 'Raster-Drehung', g_w: 'Modul-Breite', g_h: 'Modul-Höhe', g_x: 'Raster verschieben ↔', g_y: 'Raster verschieben ↕', cell_entity: 'Sensor für das nächste Modul', area_labels: 'Beschriftung auf den Flächen', area_toggle: '▦-Knopf in der Karte zum Ein-/Ausblenden der Flächen', area_summary: 'Summenzeile (Leistung je Fläche + Gesamt)',
   power_unit: 'Leistungseinheit (W/kW)', show_utilization: 'Auslastungszeile (% je Anlage)', utilization_base: 'Auslastung bezogen auf',
-  sun_marker: 'Sonnenmarker', sun_marker_position: 'Position des Sonnenmarkers', sun_marker_color: 'Farbe des Sonnenmarkers', moon_marker: 'Mondmarker', moon_marker_position: 'Position des Mondmarkers', moon_marker_color: 'Farbe des beleuchteten Monds', moon_below_horizon: 'Mond auch unter dem Horizont zeigen (blass)', moon_path: 'Mondbahn zeichnen (mit Auf- und Untergang)',
+  sun_marker: 'Sonnenmarker', sun_marker_position: 'Position des Sonnenmarkers', sun_marker_color: 'Farbe des Sonnenmarkers', moon_marker: 'Mondmarker', moon_marker_position: 'Position des Mondmarkers', moon_marker_color: 'Farbe des beleuchteten Monds', moon_below_horizon: 'Mond auch unter dem Horizont zeigen (blass)', moon_path: 'Mondbahn zeichnen (mit Auf- und Untergang)', moon_toggle: '☾-Knopf in der Karte zum Ein-/Ausblenden des Monds',
   energy_display: 'Ansicht „Ertrag“ zeigt', power_style: 'Ansicht „Leistung“ zeigt', sector_labels: 'Werte an den Balken', label_toggle: '%-Knopf in der Karte zum Ein-/Ausblenden der Werte', sector_labels_min: 'Beschriften ab (% des größten Balkens)',
   title: 'Titel (leer = kein Titel)',
   power_entity: 'PV-Leistungssensor',
@@ -2196,7 +2219,10 @@ SECTIONS = [
       { name: 'moon_marker_color', selector: COLOR },
       { name: 'moon_below_horizon', selector: { boolean: {} } },
     ] },
-    { name: 'moon_path', selector: { boolean: {} } },
+    { type: 'grid', name: '', schema: [
+      { name: 'moon_path', selector: { boolean: {} } },
+      { name: 'moon_toggle', selector: { boolean: {} } },
+    ] },
     { name: 'season_overlay', selector: { boolean: {} } },
     { name: 'show_sun_paths', selector: { boolean: {} } },
     { name: 'sun_path_toggle', selector: { boolean: {} } },

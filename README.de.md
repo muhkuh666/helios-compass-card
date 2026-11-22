@@ -406,6 +406,7 @@ Die Standardbelegung: oben links die Leistung der gewählten Anlage, oben rechts
 | `moon_marker_color` | `#fff8dc` | Farbe des beleuchteten Monds |
 | `moon_below_horizon` | `false` | Mond auch unter dem Horizont zeigen (blass) |
 | `moon_path` | `false` | Mondbahn (aktueller bzw. nächster Durchgang) mit Mondaufgang ☾↑ und Monduntergang ☾↓ |
+| `moon_toggle` | `true` | ☾-Knopf in der Karte zum Ein-/Ausblenden von Mond und Mondbahn (wird gemerkt) |
 | `metric` | `time` | Standard-Ansicht: `areas`, `power`, `time`, `energy`, `avg_power`, `shading` oder `clock` |
 | `show_metric_switch` | `true` | Umschalter Zeit / Ertrag / Ø Leistung / Schatten anzeigen |
 | `show_stats` | `true` | Kennzahlen-Zeile anzeigen |
@@ -532,7 +533,7 @@ mode: single
 
 | Version | Änderungen |
 |---|---|
-| **1.20.0** | 🌙 Mondbahn (`moon_path`): aktueller bzw. nächster Durchgang des Monds mit Stundenmarken, Auf- und Untergang |
+| **1.20.0** | 🌙 Mondbahn (`moon_path`): aktueller bzw. nächster Durchgang des Monds mit Stundenmarken, Auf- und Untergang; ☾-Knopf in der Karte zum Ein-/Ausblenden des Monds (`moon_toggle`) |
 | **1.19.0** | 🌙 Mond in der Rose: Symbol mit echter Mondphase, am Rand oder auf Mondhöhe (`moon_marker`, `moon_marker_position`, `moon_marker_color`, `moon_below_horizon`); neue Eckwerte Mondphase, Beleuchtung, Mondazimut und Mondhöhe – lokal berechnet, kein Sensor nötig |
 | **1.18.0** | ▦-Knopf in der Karte zum Ein-/Ausblenden der Flächen im Hausbild (`area_toggle`) |
 | **1.17.0** | Neue Ansicht „Flächen“ (nur Stränge im Bild, ohne Balken); Summenzeile je Fläche + Gesamt (`area_summary`); Eckwert „Gesamtleistung aller Anlagen“ (`type: total`); verständlichere Hinweise bei den Flächen |

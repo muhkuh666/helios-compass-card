@@ -406,6 +406,7 @@ Defaults: top left shows the power of the selected system, top right the sun azi
 | `moon_marker_color` | `#fff8dc` | color of the lit part of the moon |
 | `moon_below_horizon` | `false` | also show the moon below the horizon (faded) |
 | `moon_path` | `false` | draw the moon path (current or next pass) with moonrise ☾↑ and moonset ☾↓ |
+| `moon_toggle` | `true` | ☾ button on the card to show/hide moon and moon path (remembered) |
 | `metric` | `time` | default view: `areas`, `power`, `time`, `energy`, `avg_power`, `shading` or `clock` |
 | `show_metric_switch` | `true` | show the view switch |
 | `metrics` | all | views in the switch: `areas`, `power`, `time`, `energy`, `avg_power`, `shading`, `clock` |
@@ -531,7 +532,7 @@ mode: single
 
 | Version | Changes |
 |---|---|
-| **1.20.0** | 🌙 Moon path (`moon_path`): current or next pass of the moon with hour marks, moonrise and moonset |
+| **1.20.0** | 🌙 Moon path (`moon_path`): current or next pass of the moon with hour marks, moonrise and moonset; ☾ button on the card to show/hide the moon (`moon_toggle`) |
 | **1.19.0** | 🌙 Moon in the rose: symbol with the real moon phase, at the edge or at moon elevation (`moon_marker`, `moon_marker_position`, `moon_marker_color`, `moon_below_horizon`); new corner values moon phase, illumination, moon azimuth and elevation – calculated locally, no sensor needed |
 | **1.18.0** | ▦ button on the card to show/hide the areas in the house image (`area_toggle`) |
 | **1.17.0** | New “Areas” view (strings in the image only, no bars); summary row per area + total (`area_summary`); corner value “Total power of all systems” (`type: total`); clearer hints for areas |
