@@ -46,3 +46,13 @@ jobs:
           files: helios-compass-card.js
           body_path: .github/release-notes.md
           make_latest: true
+      - name: JS an bestehendes Release anhängen (für den Download-Zähler)
+        if: steps.v.outputs.exists == 'true'
+        run: |
+          if gh release view "${{ steps.v.outputs.tag }}" --json assets --jq '.assets[].name' | grep -qx helios-compass-card.js; then
+            echo "Asset ist schon angehängt."
+          else
+            gh release upload "${{ steps.v.outputs.tag }}" helios-compass-card.js
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
